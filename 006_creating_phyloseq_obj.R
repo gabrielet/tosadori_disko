@@ -1,4 +1,4 @@
-# source("006_creating_phyloseq_obj_bacteria_dada.R")
+# source("006_creating_phyloseq_obj.R")
 
 # load libraries
 library("plyr")

@@ -1,4 +1,4 @@
-# source("007_basic_statistics_enviro_improved_bacteria.R")
+# source("007_basic_statistics_enviro.R")
 
 # load libraries
 library("plyr")

@@ -1,4 +1,4 @@
-# source("005_dada_analysis_bacteria.R")
+# source("005_dada_analysis.R")
 
 # The data we are using are already demultiplexed and barcodes were already removed. So, the FASTQ files are ready to perform the DADA2 pipeline
 

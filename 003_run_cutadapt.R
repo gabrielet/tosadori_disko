@@ -1,3 +1,6 @@
+# source("003_run_cutadapt.R")
+
+# load libraries
 library("Biostrings")
 
 ##################### select the experiment #####################

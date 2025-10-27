@@ -1,3 +1,5 @@
+# source("002_demultiplex_samples.R")
+
 # IMPORTANT NOTE
 # this file is used to create all the fastq files for all the samples
 # no matter the treatment.

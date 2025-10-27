@@ -1,4 +1,4 @@
-# source("008_taxa_barplots_no_thresholding_no_phylum_STANDARD_ERROR.R")
+# source("008_taxa_barplots_no_thresholding_no_phylum_std_error.R")
 
 # load libraries
 library("plyr")
