@@ -12,26 +12,23 @@ library("scales")
 library("plotrix")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 
 # select the proper organism
-orgn <- "bacteria"
+exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria"
 
-# select the clustering method
+# select the clustering method. for bacteria is ASV
 if (orgn == "bacteria") {
 	clust_method <- "ASV"
-	# select exp name
-	exp_name <- "submission_final_norejects_dada_new_bootstrap"
+# for fungi is OTU
 } else if (orgn == "fungi") {
 	clust_method <- "OTU"
-	# select exp name
-	exp_name <- "submission_final_norejects_dada_final_camelia"
 }
 
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name, " CLUSTERED WITH ", clust_method, " TAXA ASSIGNED WITH ", taxa_algo))
 
@@ -39,7 +36,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -64,10 +61,8 @@ phylo_metadata <- sample_data(phylo_data)
 # loop through taxa levels, to aggregate appropriately
 #taxa_level <- "Phylum"
 # get best n taxa for the selected taxa_level
-n_best <- c(10, 15, 15)
+n_best <- c(5, 15, 15)
 names(n_best) <- c("Phylum", "Order", "Genus")
-
-######### PLOTTING BEST SCORING TAXA
 
 # create a list of phylo objects containing DNA, RNA, or ALL samples
 phylo_xna <- list()
@@ -79,6 +74,8 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 
 	# loop through sample types
 	for (xna in names(phylo_xna)) {
+
+#		taxa_level <- "Order" ; xna <- "DNA"; a_time <- "August"; a_treat <- "C"
 
 		# remove ASVs which are always zero for the subset under consideration
 		phylo_xna[[xna]] <- prune_taxa(taxa_sums(phylo_xna[[xna]]) > 0, phylo_xna[[xna]])
@@ -100,6 +97,9 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 
 		# get ordered taxa names, using factors
 		taxa_names <- tax_table(phylo_aggregated)[names(tx_sums), taxa_level]
+
+		# a_taxa <- "TACGGAGGGCGCAAGCGTTGTTCGGAATTACTGGGCGTAAAGCGCATGCAGGTGGCTGAGTAAGTCGAATGTGAAAGCCCCAGGCTCAACCTGGGAACTGCATCCGAAACTGCTCGGCTAGAGTCCCGGAGAGGAAGGCAGAATTCCCAATGTAGGGGTGAAATCCGTAGATATTGGGAGGAATACCGGTGGCGAAGGCGGCCTTCTGGACGGTGACTGACACTCAGATGCGAAAGCGTGGGGAGCAAACAGG"
+		# tax_table(phylo_data)[grep(a_taxa, rownames(tax_table(phylo_data))), "Phylum"]
 
 		# find unidenti, best scoring taxa, and other taxa
 		unidenti <- grep("Unidentified", taxa_names)
@@ -130,7 +130,9 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 		# if n_best is less than available taxa
 		if (n_best[taxa_level] < nrow(taxa_names)) {
 			# get other taxa
-			other_taxa <- taxa_names[(n_best[taxa_level]+1):length(taxa_names)]
+			other_taxa <- taxa_names[(n_best[taxa_level]+1):nrow(taxa_names)]
+		} else {
+			other_taxa <- ""
 		}
 
 		################################################################################################
@@ -251,6 +253,10 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 
 		print("Final plot")
 
+		# use these two lines if debugging is required
+#		backup_of_caw <- storing_all_timepoints
+#		storing_all_timepoints <- backup_of_caw
+
 		# set levels for T_level
 		last_two <- as.character(c(storing_all_timepoints$T_level[!grepl("Other|Unidenti", storing_all_timepoints$T_level)], storing_all_timepoints$T_level[grepl("Other|Unidenti", storing_all_timepoints$T_level)]))
 		storing_all_timepoints$T_level <- factor(storing_all_timepoints$T_level, levels=unique(last_two))
@@ -268,23 +274,6 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 		plotting_palette <- plotting_palette[1:length(levels(storing_all_timepoints$T_level))]
 		names(plotting_palette) <- levels(storing_all_timepoints$T_level)
 
-		# get the plot ready
-		ribon_plot <- storing_all_timepoints %>%
-					count(T_level, Treatment, TimePoint, SE, wt=Relative, name="Relative") %>%
-					ggplot() +
-					geom_bar(aes(fill=T_level, y=Relative, x=Treatment), position="fill", stat="identity", color="black") +
-					scale_fill_manual(name="", values=plotting_palette) +
-					ggplot_theme(leg_pos="right", ang_le=45) +
-					xlab("") +
-					ylab("Relative abundance") +
-					facet_wrap(~TimePoint) +
-					labs(fill=taxa_level) +
-					ggtitle("") +
-					theme(panel.spacing = unit(3, "lines"))
-
-		# export treatment
-		export_svg(paste0(save_taxa_figs, "taxa_", xna, "_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_NEW_SUMS"), ribon_plot, as_rds=T, width=32, height=24)
-
 		# get a better plot ready
 		# reverse levels because of coord_flip
 		storing_all_timepoints$T_level <- factor(storing_all_timepoints$T_level, levels=rev(levels(storing_all_timepoints$T_level)))
@@ -297,20 +286,20 @@ for (taxa_level in c("Phylum", "Order", "Genus")) {
 		better_plot <- storing_all_timepoints %>%
 					count(T_level, Treatment, TimePoint, SE_up, SE_down, wt=Relative, name="Relative") %>%
 					ggplot(aes(fill=Treatment, y=Relative, x=T_level)) +
-					geom_col(position = position_dodge(width = 0.7), width=0.6, color="black", lwd=1) +
-					geom_errorbar(aes(T_level, ymin = SE_down, ymax = SE_up), position = position_dodge(width=0.7), width=0.3, lwd=1) +
+					geom_col(position = position_dodge(width = 0.9), width=0.8, color="black", lwd=1) +
+					geom_errorbar(aes(T_level, ymin = SE_down, ymax = SE_up), position = position_dodge(width=0.9), width=0.3, lwd=2) +
 					scale_fill_manual(name="Treatment", values=treatment_palette) +
-					ggplot_theme(leg_pos="bottom", ang_le=0) +
+					ggplot_theme(leg_pos="bottom", ang_le=0, fnt_size=30) +
 					guides(fill=guide_legend(override.aes=list(shape=21, size=20), ncol=2), shape=guide_legend(override.aes=list(size=20))) +
-					xlab("") +
+					xlab(paste0("Total fungal community (", xna, ")")) +
 					ylab("Relative abundance") +
 					ggtitle("") +
 					facet_wrap(~TimePoint) +
 					coord_flip() +
-					theme(panel.spacing = unit(3, "lines"))
+					theme(panel.spacing = unit(3, "lines"), axis.title.y=element_text(size=40))
 
 		# export treatment
-		export_svg(paste0(save_taxa_figs, "better_plot_taxa_", xna, "_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_NEW_SUMS"), better_plot, as_rds=T, width=32, height=24)
+		export_figs_tabs(paste0(save_taxa_figs, "BIGGER_better_plot_taxa_", xna, "_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_NEW_SUMS"), better_plot, as_rds=F, width=168*4, height=168*4)
 	}
 }
 

@@ -12,7 +12,7 @@ library("scales")
 library("plotrix")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
@@ -34,7 +34,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -55,17 +55,14 @@ phylo_data <- readRDS(paste0(save_phylo, "phylo_data_", exp_name, ".Rds"))
 phylo_metadata <- sample_data(phylo_data)
 
 # loop through taxa levels, to aggregate appropriately
-#taxa_level <- "Phylum"
 # get best 10 taxa
-n_best <- c(10, 15, 15)
+n_best <- c(6, 15, 15)
 names(n_best) <- c("Phylum", "Order", "Genus")
 
-###################### THIS IS THE PART WHERE THE BEST TAXA ARE RETRIEVED ######################
-# in this case it is necessary to get best taxa before splitting by DNA and RNA, because the two
-# will be compared against each other
+######### PLOTTING BEST SCORING TAXA
 
 # loop through taxa_levels
-for (taxa_level in c("Phylum")) {
+for (taxa_level in c("Phylum", "Order")) {
 
 	# aggregate taxa at a specific taxonomy level
 	phylo_aggregated <- tax_glom(phylo_data, taxrank=taxa_level)
@@ -112,7 +109,9 @@ for (taxa_level in c("Phylum")) {
 	# if n_best is less than available taxa
 	if (n_best[taxa_level] < nrow(taxa_names)) {
 		# get other taxa
-		other_taxa <- taxa_names[(n_best[taxa_level]+1):length(taxa_names)]
+		other_taxa <- taxa_names[(n_best[taxa_level]+1):nrow(taxa_names)]
+	} else {
+		other_taxa <- ""
 	}
 
 	################################################################################################
@@ -122,6 +121,8 @@ for (taxa_level in c("Phylum")) {
 
 	# loop through treatment
 	for (xna in unique(sample_data(phylo_aggregated)$DNA_RNA)) {
+
+#		xna <- "DNA"
 
 		print(paste0("Analysing ", xna))
 
@@ -140,6 +141,8 @@ for (taxa_level in c("Phylum")) {
 
 		# loop through taxa types
 		for (taxa_type in c("best_taxa", "other_taxa", "unidenti_taxa")) {
+
+#			taxa_type <- "other_taxa"
 
 			print(paste0("Analysing ", taxa_type))
 
@@ -217,23 +220,6 @@ for (taxa_level in c("Phylum")) {
 	plotting_palette <- plotting_palette[1:length(levels(storing_all_xnas$T_level))]
 	names(plotting_palette) <- levels(storing_all_xnas$T_level)
 
-	# get the plot ready
-	ribon_plot <- storing_all_xnas %>%
-			count(T_level, DNA_RNA, wt = Relative, name = "Relative") %>%
-			ggplot() +
-			geom_bar(aes(fill=T_level, y=Relative, x=DNA_RNA), position="fill", stat="identity", color="black", width=0.6) +
-			scale_fill_manual(name="", values=plotting_palette) +
-			ggplot_theme(leg_pos="right", ang_le=0) +
-			guides(fill=guide_legend(ncol=1)) +
-			ggtitle("") +
-			xlab("") +
-			ylab("Relative abundance") +
-			labs(fill=taxa_level) +
-			theme(panel.spacing = unit(3, "lines"))
-
-	# export treatment
-	export_svg(paste0(save_taxa_figs, "NEW_PLOT_taxa_plot_DNA_RNA_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_no_timepoint"), ribon_plot, as_rds=T, width=32, height=24)
-
 	# get a better plot ready
 	# reverse levels because of coord_flip
 	storing_all_xnas$T_level <- factor(storing_all_xnas$T_level, levels=rev(levels(storing_all_xnas$T_level)))
@@ -249,19 +235,19 @@ for (taxa_level in c("Phylum")) {
 	better_plot <- storing_all_xnas %>%
 				count(T_level, DNA_RNA, SE_up, SE_down, wt=Relative, name="Relative") %>%
 				ggplot(aes(fill=DNA_RNA, y=Relative, x=T_level)) +
-				geom_col(position = position_dodge(width = 0.7), width=0.6, color="black", lwd=1) +
+				geom_col(position = position_dodge(width = 0.9), width=0.8, color="black", lwd=1) +
 				scale_fill_manual(name="DNA/RNA", values=xna_palette) +
-				geom_errorbar(aes(T_level, ymin = SE_down, ymax = SE_up), position = position_dodge(width=0.7), width=0.3, lwd=1) +
-				ggplot_theme(leg_pos="bottom", fnt_sz=90, ang_le=0) +
+				geom_errorbar(aes(T_level, ymin = SE_down, ymax = SE_up), position = position_dodge(width=0.9), width=0.3, lwd=2) +
+				ggplot_theme(leg_pos="bottom", fnt_size=90, ang_le=0) +
 				guides(fill=guide_legend(title="", override.aes=list(shape=21, size=30), ncol=2), shape=guide_legend(override.aes=list(size=30))) +
-				xlab("") +
+				xlab(taxa_level) +
 				ylab("Relative abundance") +
 				ggtitle("") +
 				coord_flip() +
 				theme(panel.spacing = unit(3, "lines"))
 
 	# export treatment
-	export_svg(paste0(save_taxa_figs, "AAA_better_plot_taxa_DNA_RNA_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_MEANS"), better_plot, as_rds=T, width=32, height=24)
+	export_figs_tabs(paste0(save_taxa_figs, "BIGGER_better_plot_taxa_DNA_RNA_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_MEANS"), better_plot, as_rds=F, width=168*4, height=168*4)
 
 	# export table used for plotting
 	write.table(storing_all_xnas, paste0(save_taxa_figs, "DNA_RNA_best_", n_best[taxa_level], "_", taxa_level, "_", exp_name, "_", clust_method, "_", taxa_algo, "_MEANS.csv"), col.names=T, row.names=F, quote=F, sep="\t")

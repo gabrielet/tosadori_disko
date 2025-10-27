@@ -1,9 +1,6 @@
-#The data we are using are already demultiplexed and barcodes were already removed. So, the FASTQ files are ready to perform the DADA2 pipeline
+# source("005_dada_analysis_bacteria.R")
 
-# following the pipeline suggested here, for inferring ASVs
-# https://benjjneb.github.io/dada2/tutorial.html
-
-# source("005_dada_analysis_fungi.R")
+# The data we are using are already demultiplexed and barcodes were already removed. So, the FASTQ files are ready to perform the DADA2 pipeline
 
 # load libraries
 library("dada2")
@@ -11,38 +8,11 @@ library("ggplot2")
 library("phyloseq")
 library("DECIPHER")
 
-# define function for exporting sequences as fasta files
-# to blast them in a format qiime likes, or other purposes
-# https://docs.qiime2.org/2021.11/tutorials/importing/#sequences-without-quality-information-i-e-fasta
-# The ID in each header must follow the format <sample-id>_<seq-id>.
-# <sample-id> is the identifier of the sample the sequence belongs to, and
-# <seq-id> is an identifier for the sequence within its sample.
-
-make_fastas <- function(sequences) {
-
-	# create fake fasta headers
-	snames <- paste(">", sequences, sep="")
-	fastas <- vector()
-
-	# loop through all the names
-	for (i in c(1:length(snames))) {
-
-		# and put together the table
-		fastas <- append(fastas, rbind(snames[i], sequences[i]))
-	}
-
-	# results
-	return(fastas)
-}
-
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ##################### select the experiment #####################
-exp_name <- "september_2023"
-
-# select the proper organism
-orgn <- "fungi"
+exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria"
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, " EXPERIMENT NAME ", exp_name))
 
@@ -50,7 +20,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, " EXPERIMENT NAME ", exp_nam
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/diskodry2021/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # these are the paths where the files from the dada2 analysis go
@@ -77,6 +47,32 @@ for (ln in c(1:length(fn_fwds))) {
 	sample_names <- append(sample_names, strsplit(strsplit(basename(fn_fwds[ln]), "\\.")[[1]][1], "_R1")[[1]][1])
 }
 
+############ now use a DADA2 function to evaluate the quality of the reads
+############ forward and reverse, first two samples
+########### plotQualityProfile(fn_fwds[1:2])
+########### plotQualityProfile(fn_revs[1:2])
+
+############ Export a svg file for each sample, to get a complete view of the data.
+############ forward reads all
+###########for (smpl in c(1:length(fn_fwds))){
+###########   p <- plotQualityProfile(fn_fwds[smpl])
+###########   export_svg(paste0(save_img, "seqs_quality_profile_sample_", smpl, "_forward.svg"), p)
+###########}
+
+############ reverse reads all
+###########for (smpl in c(1:length(fn_fwds))){
+###########   p <- plotQualityProfile(fn_fwds[smpl])
+###########   export_svg(paste0(save_img, "seqs_quality_profile_sample_", smpl, "_reverse.svg"), p)
+###########}
+
+# NOTE this is an optional step, just to organise the figures in two separated directories.
+# To do so, enter the save_img directory from the terminal:
+# cd /home/gabriele/microbiology/disko2013/metadata/analysis/cutadapted/figures/
+# and copy-paste these commands:
+# mkdir forward; mkdir reverse; mv *forward.svg forward; mv *reverse.svg reverse/; exit;
+
+# At this point, having observed the quality profiles of all the samples, we need to define a threshold, if needed, to trim the sequences in order to keep only high-quality, reliable nucleotides. To do this, we need to remember how [Phred scores](https://gatk.broadinstitute.org/hc/en-us/articles/360035531872-Phred-scaled-quality-scores) work. In general, scores > 30 should be acceptable, for amplicon data. The higher the better.
+
 # Create a directory for filtered FASTQ files.
 
 # define a new directory for trimmed and filtered cutadapted files
@@ -91,14 +87,20 @@ filt_fwds <- paste0(filtered_path, paste0(sample_names, "_F_filt.fastq"))
 filt_revs <- paste0(filtered_path, paste0(sample_names, "_R_filt.fastq"))
 
 # trim at the position where the quality of the sequences drops
+# IN THIS SPECIFIC CASE, WE HAVE
+# - R1 trimmed at 220
+# - R2 trimmed ad 220, too since there is no visible drop in quality
+# - no need to remove phiX sequences
 
 if (orgn == "bacteria") {
 	# 16S calls for truncation
-	out <- filterAndTrim(fwd=fn_fwds, filt=filt_fwds, rev=fn_revs, filt.rev=filt_revs, truncLen=c(220, 220), maxN=0, maxEE=c(4, 4), truncQ=2, rm.phix=FALSE, compress=TRUE, multithread=TRUE)
+	out <- filterAndTrim(fwd=fn_fwds, filt=filt_fwds, rev=fn_revs, filt.rev=filt_revs, truncLen=c(160, 220), maxN=0, maxEE=c(4, 2), truncQ=2, rm.phix=FALSE, compress=TRUE, multithread=TRUE)
 } else if (orgn == "fungi") {
 	# no truncation because ITS has variable length
 	out <- filterAndTrim(fwd=fn_fwds, filt=filt_fwds, rev=fn_revs, filt.rev=filt_revs, truncQ=2, minLen=50, maxN=0, maxEE=c(4, 4), rm.phix=FALSE, compress=TRUE, multithread=TRUE)
 }
+
+# Now, learn the error rates.
 
 # learning the error rates, forward
 err_fwd <- learnErrors(filt_fwds, multithread=TRUE)
@@ -118,6 +120,17 @@ export_svg(paste0(save_img, "plot_errors_reverse.svg"), plot_rev)
 # if a warning is thrown, such as:
 # Warning: Transformation introduced infinite values in continuous y-axis
 # no need to worry, as reported here https://github.com/benjjneb/dada2/issues/742
+
+# Dereplicate, merge paired ends an perform sample inference.
+
+# performing dereplication, forward
+#################################derep_fwds <- derepFastq(filt_fwds, verbose=FALSE)
+################################## and reverse
+#################################derep_revs <- derepFastq(filt_revs, verbose=FALSE)
+
+################################## name the derep-class objects by the sample names
+#################################names(derep_fwds) <- sample_names
+#################################names(derep_revs) <- sample_names
 
 # perform sample inference, forward
 dada_fwds <- dada(filt_fwds, err=err_fwd, multithread=TRUE, pool="pseudo")
@@ -171,47 +184,53 @@ saveRDS(seq_tab_no_chim, paste0(save_data, "counts_table_ASV.Rds"))
 #set seed for reproducibility
 set.seed(131)
 
-# select min bootstrap to assign a taxa. see:
-# https://benjjneb.github.io/dada2/assign.html
-# At this more stringent threshold, sequence 5 and 7 are not classified
-# at the genus level. Instead an NA is returned, indicating that less
-# than minBoot=80 of the 100 bootstraps returned the same genus for 
-# those sequences.
-boot <- 60
+# select min bootstrap to assign a taxa
+boot <- 80
 
-# create a DNAStringSet from the ASVs
-xna_set <- DNAStringSet(getSequences(seq_tab_no_chim))
+# run assignment for ASVs
+taxa_asv <- assignTaxonomy(seq_tab_no_chim, "/mnt/cinqueg/gabriele/work/microbiology/databases/silva_nr99_v138.1_train_set.fa.gz", minBoot=boot, outputBootstraps=TRUE, tryRC=TRUE, multithread=TRUE)
 
-# load trainingSet. it is already a variable
-load("/microbiology/narsarsuaq/original_metadata/SILVA_SSU_r138_2019.RData")
+# select the clustering method
+clust_method <- "ASV"
 
-# run idtaxa
-ids <- IdTaxa(xna_set, trainingSet, strand="both", threshold=boot, processors=NULL, verbose=FALSE)
-
-# ranks of interest
-ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species")
-
-# convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
-taxa_asv <- t(sapply(ids, function(x) {
-	m <- match(ranks, x$rank)
-	tx_asv <- x$taxon[m]
-	return(tx_asv)
-}))
-
-# assign col and rownames
-colnames(taxa_asv) <- ranks;
-rownames(taxa_asv) <- getSequences(seq_tab_no_chim)
+# this is the path where counts tables and taxonomy go
+path_to_taxa <- paste0(path_to_exp, clust_method, "/taxonomy/")
+# create the folder
+ifelse(dir.exists(path_to_taxa), TRUE, dir.create(path_to_taxa, recursive=T))
 
 # export taxonomy table
-saveRDS(taxa_asv, paste0(path_to_taxa, "taxonomy_table_boot_", boot, "_idtaxa_", clust_method, ".Rds"))
-
-###########################################################################################################################
-# run assignment for ASVs
-boot <- 70
-
-taxa_asv <- assignTaxonomy(seq_tab_no_chim, "/microbiology/databases/silva_nr99_v138.1_train_set.fa.gz", minBoot=boot, outputBootstraps=TRUE, tryRC=TRUE, multithread=TRUE)
-
 saveRDS(taxa_asv[[1]], paste0(path_to_taxa, "taxonomy_table_boot_", boot, "_NBC_", clust_method, ".Rds"))
 # and bootstrap scores
 saveRDS(taxa_asv[[2]], paste0(path_to_taxa, "taxonomy_table_boot_", boot, "_NBC_", clust_method, "_scores.Rds"))
+
+######################### get table ready for latex
+
+# load data
+dada_info <- read.csv(paste0(save_data, "dada_filtering_steps.csv"), header=T, sep="\t")
+match_table <- read.csv(paste0(save_data, "matching_names_table.csv"), header=T, sep="\t")
+
+# create rna names
+all_xnas <- rbind.data.frame(match_table, cbind.data.frame(sampleID=gsub("AD006", "AD012", match_table$sampleID), sample_info=match_table$sample_info, xna=rep("RNA", nrow(match_table))))
+
+# create a sampleID column
+dada_info$sampleID <- unlist(lapply(strsplit(rownames(dada_info), "_",), "[[", 1))
+
+# merge by sampleID
+final_latex <- merge(dada_info, all_xnas, by="sampleID")
+
+# split col into cols
+final_latex$treatment <- unlist(lapply(strsplit(final_latex$sample_info, "_"), "[[", 1))
+final_latex$treatment <- ifelse(final_latex$treatment=="C", "Control", "Warming")
+final_latex$site <- unlist(lapply(strsplit(final_latex$sample_info, "_"), "[[", 2))
+final_latex$timepoint <- unlist(lapply(strsplit(final_latex$sample_info, "_"), "[[", 3))
+
+# sort by site and month and drop colums
+final_latex_export <- final_latex[with(final_latex, order(treatment, site, -xtfrm(timepoint))), c("treatment", "timepoint", "site", "input", "filtered", "denoisedF", "denoisedR", "merged")]
+
+colnames(final_latex_export) <- c("Treatment", "Timepoint", "Site", "Input", "Filtered", "Denoised forward", "Denoised reverse", "Merged")
+
+# export
+write.table(final_latex_export[which(final_latex$xna=="DNA"), ], paste0(save_data, "dada_info_dna.tex"), col.names=T, row.names=F, sep=" & ", quote=F)
+
+write.table(final_latex_export[which(final_latex$xna=="RNA"), ], paste0(save_data, "dada_info_rna.tex"), col.names=T, row.names=F, sep=" & ", quote=F)
 

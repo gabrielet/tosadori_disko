@@ -15,24 +15,22 @@ library("vegan")
 library("viridis")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
-exp_name <- "submission_final_norejects_dada_new_bootstrap"
+exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria"
 
-# select the proper organism
-orgn <-  "fungi"
-
-# select the clustering method
+# select the clustering method. for bacteria is ASV
 if (orgn == "bacteria") {
 	clust_method <- "ASV"
+# for fungi is OTU
 } else if (orgn == "fungi") {
 	clust_method <- "OTU"
 }
 
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name))
 
@@ -40,7 +38,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -90,11 +88,15 @@ print("adonis/permanova on DNA and RNA, separately, by treatment on all timepoin
 # loop throught DNA/RNA
 for (xna in names(phylo_xna)) {
 
+#	xna <- "DNA"
+
 	# remove ASVs which are always zero for the subset under consideration
 	phylo_xna[[xna]] <- prune_taxa(apply(tax_table(phylo_xna[[xna]]), 1, function(x) length(which(x==0))!=length(x)), phylo_xna[[xna]])
+#	phylo_xna[[xna]] <- prune_taxa(taxa_sums(phylo_xna[[xna]]) > 0, phylo_xna[[xna]])
 
 	# get taxa table and transpose it in to obtain a table which is
-	# sample X species as described in the Adonis documentationtransposed_taxa <- t(otu_table(phylo_xna[[xna]]))
+	# sample X species as described in the Adonis documentation
+	transposed_taxa <- t(otu_table(phylo_xna[[xna]]))
 
 	# get metadata
 	adonis_meta <- as.data.frame(as.matrix(sample_data(phylo_xna[[xna]])))
@@ -127,22 +129,22 @@ for (xna in names(phylo_xna)) {
 	# plot function
 	box_treat <- function() { boxplot(dispersion_treat) }
 	# export plot
-	export_svg(paste0(save_adonis, "box_treat_", xna, "_", exp_name), box_treat(), base=TRUE)
+	export_figs_tabs(paste0(save_adonis, "box_treat_", xna, "_", exp_name), box_treat(), base=TRUE, width=168*2, height=168*3)
 	# plot function
 	disper_treat <- function() { plot(dispersion_treat, hull=TRUE, ellipse=FALSE) }
 	# export plot
-	export_svg(paste0(save_adonis, "disper_treat_", xna, "_", exp_name), disper_treat(), base=TRUE)
+	export_figs_tabs(paste0(save_adonis, "disper_treat_", xna, "_", exp_name), disper_treat(), base=TRUE, width=168*2, height=168*3)
 
 	# run betadisper for timepoint
 	dispersion_time <- betadisper(vegdist(transposed_taxa, method="euclidean"), group=adonis_meta$TimePoint)
 	# plot function
 	box_time <- function() { boxplot(dispersion_time) }
 	# export plot
-	export_svg(paste0(save_adonis, "box_time_", xna, "_", exp_name ), box_time(), base=TRUE)
+	export_figs_tabs(paste0(save_adonis, "box_time_", xna, "_", exp_name ), box_time(), base=TRUE, width=168*2, height=168*3)
 	# plot function
 	disper_time <- function() { plot(dispersion_time, hull=TRUE, ellipse=FALSE) }
 	# export plot
-	export_svg(paste0(save_adonis, "disper_time_", xna, "_", exp_name ), disper_time(), base=TRUE)
+	export_figs_tabs(paste0(save_adonis, "disper_time_", xna, "_", exp_name ), disper_time(), base=TRUE, width=168*2, height=168*3)
 
 	sink(paste0(save_adonis, "adonis_with_interaction_", xna, ".txt"))
 
@@ -215,11 +217,11 @@ dispersion_dna_rna <- betadisper(vegdist(transposed_taxa, method="euclidean"), g
 # plot function
 box_dna_rna <- function() { boxplot(dispersion_dna_rna) }
 # export plot
-export_svg(paste0(save_adonis, "box_dna_rna_", exp_name), box_dna_rna(), base=TRUE)
+export_figs_tabs(paste0(save_adonis, "box_dna_rna_", exp_name), box_dna_rna(), base=TRUE, width=168*2, height=168*3)
 # plot function
 disper_dna_rna <- function() { plot(dispersion_dna_rna, hull=TRUE, ellipse=FALSE) }
 # export plot
-export_svg(paste0(save_adonis, "disper_dna_rna_", exp_name), disper_dna_rna(), base=TRUE)
+export_figs_tabs(paste0(save_adonis, "disper_dna_rna_", exp_name), disper_dna_rna(), base=TRUE, width=168*2, height=168*3)
 
 sink(paste0(save_adonis, "adonis_DNA_RNA.txt"))
 
@@ -251,11 +253,11 @@ dispersion_full_model <- betadisper(vegdist(transposed_taxa, method="euclidean")
 # plot function
 box_full_model <- function() { boxplot(dispersion_full_model) }
 # export plot
-export_svg(paste0(save_adonis, "box_full_model_", exp_name), box_full_model(), base=TRUE)
+export_figs_tabs(paste0(save_adonis, "box_full_model_", exp_name), box_full_model(), base=TRUE, width=168*2, height=168*3)
 # plot function
 disper_full_model <- function() { plot(dispersion_full_model, hull=TRUE, ellipse=FALSE) }
 # export plot
-export_svg(paste0(save_adonis, "disper_full_model_", exp_name), disper_full_model(), base=TRUE)
+export_figs_tabs(paste0(save_adonis, "disper_full_model_", exp_name), disper_full_model(), base=TRUE, width=168*2, height=168*3)
 
 sink(paste0(save_adonis, "adonis_treat_by_time_DNA_RNA.txt"))
 

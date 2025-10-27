@@ -5,8 +5,7 @@ library("Biostrings")
 exp_name <- "AD012" # RNA
 
 # select the proper organism, hence directory
-#orgn <- "bacteria"
-orgn <- "fungi"
+orgn <- "bacteria"
 
 # set proper reverse complement primers
 if (orgn == "bacteria") {
@@ -35,7 +34,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn))
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 path_to_exp <- paste0(root_path, orgn_dir, exp_name, "/")
 fastq_path <- paste0(path_to_exp, "shiny_new_demultiplexed_fastq/")
 cuta_one <- paste0(path_to_exp, "cutadapted_step_one/")
@@ -53,49 +52,8 @@ ifelse(!dir.exists(cuta_final), dir.create(cuta_final, recursive = T), "dir exis
 infoSample <- read.csv(paste0(root_path, orgn_dir, "files_for_analysis/", orgn, "_", exp_name, ".csv"), header=T, sep="\t")
 
 # call cutadapt
-cutadapt <- "/.local/bin/cutadapt"
+cutadapt <- "/home/gabriele/.local/bin/cutadapt"
 system2(cutadapt, args = "--version")
-
-# before running cutadapt
-
-# read this for forward and reverse primers. NOTE HERE WE USE THE OPTION -g and -G to remove primers
-
-# https://cutadapt.readthedocs.io/en/stable/guide.html#regular-5-adapters
-
-#A 5’ adapter is a piece of DNA ligated to the 5’ end of the DNA fragment of interest. For this type of adapter to be found, the adapter sequence needs to either appear in full somewhere within the read (internal match) or at the start (5’ end) of it, where in the latter case also partial occurrences are allowed. In all cases, the adapter itself and the sequence preceding it is removed.
-
-#Assume your fragment of interest is mysequence and the adapter is ADAPTER. The reads may look like this:
-
-#ADAPTERmysequence
-#DAPTERmysequence
-#TERmysequence
-#somethingADAPTERmysequence
-
-#All the above sequences are trimmed to mysequence when you use -g ADAPTER.
-
-# read this for reverse complement. NOTE HERE WE USE THE OPTION -a and -A to remove reverse complement of primers
-
-# https://cutadapt.readthedocs.io/en/stable/guide.html#three-prime-adapters
-
-#A 3’ adapter is a piece of DNA ligated to the 3’ end of the DNA fragment of interest. The sequencer starts the sequencing process at the 5’ end of the fragment. If the fragment is shorter than the read length, the sequencer will sequence into the adapter and the reads will thus contain some part of the adapter. Depending on how much longer the read is than the fragment of interest, the adapter occurs 1) not at all, 2) partially or fully at the end of the read (not followed by any other bases), or 3) in full somewhere within the read, followed by some other bases.
-
-#Use Cutadapt’s -a option to find and trim such an adapter, allowing both partial and full occurrences.
-
-#For example, assume your fragment of interest is mysequence and the adapter is ADAPTER. Depending on the read length, you will get reads that look like this:
-
-#mysequen
-#mysequenceADAP
-#mysequenceADAPTER
-#mysequenceADAPTERsomethingelse
-
-#Using -a ADAPTER to remove this type of adapter, this will be the result:
-
-#mysequen
-#mysequence
-#mysequence
-#mysequence
-
-#As this example shows, Cutadapt allows regular 3’ adapters to occur in full anywhere within the read (preceeded and/or succeeded by zero or more bases), and also partially degraded at the 3’ end. Cutadapt deals with 3’ adapters by removing the adapter itself and any sequence that may follow.
 
 # step one: remove forward and reverse from R1 and R2
 # using regular 5' adapter (see above) because we expect

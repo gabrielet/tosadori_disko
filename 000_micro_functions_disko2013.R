@@ -1,12 +1,9 @@
-# this function was created to sort the issue
-# with the merge_samples function from phyloseq
-# as mentioned in several threads
-# https://github.com/joey711/phyloseq/issues/493
-# https://github.com/joey711/phyloseq/issues/243
-# https://github.com/joey711/phyloseq/issues/608
-# https://github.com/joey711/phyloseq/issues/386
+############ all functions used throughout the pipeline
 
+# assign factors
 assign_factors_back <- function(map_it, ref_mapping) {
+
+	# map_it <- sample_data(by_treatment)$TreatAcid ; ref_mapping <- sample_data(aggregated_taxa)$TreatAcid
 
 	# create mapping table
 	back_to_names <- cbind.data.frame(name=unique(ref_mapping), value=as.numeric(unique(ref_mapping)))
@@ -27,10 +24,10 @@ assign_factors_back <- function(map_it, ref_mapping) {
 ############################################################################### PRINTING BOXPLOTS FOR PAIRED DATA
 
 # this funtion is used to plot environmental variables
-# as boxplots using wilcoxon test since we can't assume data has normal distribution
-# http://www.sthda.com/english/wiki/unpaired-two-samples-wilcoxon-test-in-r
-print_boxplots_paired <- function(meta_data, env_vars, exp_nm, save_path){
+print_boxplots_paired_bacteria <- function(meta_data, env_vars, exp_nm, save_path){
 
+#	meta_data <- long_tab_env ; env_vars <- not_all_available_params ; exp_nm <- exp_name ; save_path <- save_box_comparison_env ; a_var <- "pH" ;
+#	meta_data <- long_tab_qpcr ; env_vars <- env_variables ; exp_nm <- exp_name ; save_path <- save_box_comparison_qpcr ; a_var <- "nifH" ;
 	# loop through environmental variables
 	for (a_var in env_vars) {
 
@@ -64,7 +61,45 @@ print_boxplots_paired <- function(meta_data, env_vars, exp_nm, save_path){
 			guides(fill=guide_legend(override.aes=list(shape=21, size=20), ncol=2), shape=guide_legend(override.aes=list(size=20))) +
 			ggplot_theme(leg_pos="bottom", ang_le=45)
 		# and export
-		export_svg(paste0(save_path, "analysing_", a_var, "_", exp_nm), pl)
+		export_figs_tabs(paste0(save_path, "analysing_", a_var, "_", exp_nm), pl)
+	}
+	return(0)
+}
+
+print_boxplots_paired_fungi <- function(meta_data, env_vars, exp_nm, save_path){
+
+#	meta_data <- long_tab_env ; env_vars <- not_all_available_params ; exp_nm <- exp_name ; save_path <- save_box_comparison_env ; a_var <- "pH" ;
+#	meta_data <- long_tab_qpcr ; env_vars <- env_variables ; exp_nm <- exp_name ; save_path <- save_box_comparison_qpcr ; a_var <- "nifH" ;
+	# loop through environmental variables
+	for (a_var in env_vars) {
+
+		print(paste0("analysing ", a_var))
+
+		# plot, using t-test, assuming environmental variables have normal distribution
+		# see histograms generated above
+		# http://www.sthda.com/english/wiki/t-test
+
+		# get data for a single gene
+		meta_sub <- meta_data[which(meta_data$variable==a_var), ]
+
+		# create palette
+		treatment_palette <- hue_pal()(2)[c(2, 1)]
+		names(treatment_palette) <- c("Control", "Warming")
+
+		# get the plot ready
+		dodge <- position_dodge(width=0.8)
+		pl <- ggplot(meta_sub, aes(x=Treatment, y=value, fill=Treatment)) +
+			geom_violin(width=1, position=dodge, linewidth=1) +
+			geom_boxplot(width=0.2, color="black", position=dodge, linewidth=1, show.legend=FALSE) +
+			geom_point(size=2, alpha=1, position=dodge, show.legend=FALSE) +
+			scale_fill_manual(name="Treatment", values=treatment_palette) +
+			xlab("") +
+			ylab("Standardised unit") +
+			ggtitle(a_var) +
+			guides(fill=guide_legend(override.aes=list(shape=21, size=20), ncol=2), shape=guide_legend(override.aes=list(size=20))) +
+			ggplot_theme(leg_pos="bottom", ang_le=45)
+		# and export
+		export_figs_tabs(paste0(save_path, "analysing_", a_var, "_", exp_nm), pl)
 	}
 	return(0)
 }
@@ -75,7 +110,8 @@ print_boxplots_paired <- function(meta_data, env_vars, exp_nm, save_path){
 # as boxplots
 print_boxplots_within <- function(meta_data, env_vars, exp_nm, save_path){
 
-	# define comparisons
+	# meta_data <- control_meta; env_vars <- env_variables; exp_nm <- paste0(exp_name, "_warming_only"); save_path <- save_box_timepoint ; envv <- "SOM_perc" ;
+
 	comparisons <- list(c("June", "July"), c("July", "August"))
 
 	# loop through environmental variables
@@ -103,7 +139,7 @@ print_boxplots_within <- function(meta_data, env_vars, exp_nm, save_path){
 			ggplot_theme(leg_pos="bottom", ang_le=45)
 
 		# and export
-		export_svg(paste0(save_path, "analysing_", envv, "_", exp_nm), pl)
+		export_figs_tabs(paste0(save_path, "analysing_", envv, "_", exp_nm), pl)
 
 		print(paste0(envv, " done"))
 	}
@@ -114,6 +150,8 @@ print_boxplots_within <- function(meta_data, env_vars, exp_nm, save_path){
 
 #rarefaction curves https://github.com/joey711/phyloseq/issues/143
 calculate_rarefaction_curves <- function(psdata, measures, depths) {
+
+	# psdata <- phylo_data_filtered; measures <- c("Observed", "Shannon"); depths <- rep(c(1, 10, 100, 1000, 1:100 * 10000), each=10)
 
 	set.seed(131)
 
@@ -149,8 +187,7 @@ calculate_rarefaction_curves <- function(psdata, measures, depths) {
 # define plotting rda with base r
 plot_ordination <- function(data, metadata, var_fitting, scale_param, arrlen) {
 
-	# adding species to triplot as mentioned here
-	# https://github.com/vegandevs/vegan/issues/341
+	# data=mod_selected[[xna]] ; metadata=imputed_meta_glom[[xna]] ; var_fitting=var_fitting_enviro[[xna]] ; scale_param=scale_parameter
 
 	# define shapes for timepoint legend
 	shape_legend <- c(16, 18, 17)
@@ -169,9 +206,6 @@ plot_ordination <- function(data, metadata, var_fitting, scale_param, arrlen) {
 	# get multiplying factors for the arrows
 	arrow_factor <- ordiArrowMul(var_fitting)
 
-	# adding species to triplot as mentioned here
-	# https://github.com/vegandevs/vegan/issues/341
-
 	# plot
 	par(mar=c(5, 5, 4, 2))
 	pl <- plot(data, type="none", cex.lab=2.5, cex.axis=2.5, cex.main=3.5, font=2, scaling=scale_param, main="")
@@ -185,7 +219,9 @@ plot_ordination <- function(data, metadata, var_fitting, scale_param, arrlen) {
 }
 
 # define plotting rda with ggplot2
-plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_param, pattern=FALSE) {
+plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_param, pattern=FALSE, orgn, positions) {
+
+#	data=mod_selected[[xna]] ; var_fitting=var_fitting_enviro[[xna]] ; all_stats=stats_to_plot[[xna]] ; v_exp=variance_expl[[xna]] ; scale_param=scale_parameter ;
 
 	# create data frame for ggplot plotting
 	# get scores for sites
@@ -198,9 +234,9 @@ plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_pa
 	treats[grep("TC", ggplot_rda$label)] <- "Control"
 
 	# collect info about treatment
-	xna <- c(nrow(ggplot_rda))
-	xna[grep("AD006", ggplot_rda$label)] <- "DNA"
-	xna[grep("AD012", ggplot_rda$label)] <- "RNA"
+	xna_name <- c(nrow(ggplot_rda))
+	xna_name[grep("AD006", ggplot_rda$label)] <- "DNA"
+	xna_name[grep("AD012", ggplot_rda$label)] <- "RNA"
 
 	# collect info about timepoint
 	times <- c(nrow(ggplot_rda))
@@ -211,7 +247,7 @@ plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_pa
 	# add the info just collect as columns to ggplot_rda
 	ggplot_rda$Treatment <- treats
 	ggplot_rda$TimePoint <- times
-	ggplot_rda$DNA_RNA <- xna
+	ggplot_rda$DNA_RNA <- xna_name
 
 	# set factors
 	ggplot_rda$Treatment <- factor(ggplot_rda$Treatment, levels=c("Control", "Warming"))
@@ -252,10 +288,10 @@ plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_pa
 				scale_color_manual(values=xna_palette) +
 				scale_fill_manual(values=treatment_palette) +
 				geom_segment(data=print_arrows, aes(x=0, xend=RDA1, y=0, yend=RDA2), arrow=arrow(length=unit(0.25, "cm")), colour="black", lwd=1) +
-				geom_text_repel(data=print_arrows, aes(x=RDA1, y=RDA2, label=names), col="black", fontface="bold", size=15, max.overlaps=20) +
-				guides(color=guide_legend(override.aes=list(shape=22, size=20)), fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
+				geom_text_repel(data=print_arrows, aes(x=RDA1, y=RDA2, label=names), col="black", fontface="bold", size=10, max.overlaps=20) +
+				guides(color=guide_legend(override.aes=list(shape=22, size=10)), fill=guide_legend(override.aes=list(shape=22, size=10)), shape=guide_legend(override.aes=list(size=10))) +
 				labs(x = paste("RDA1 (",round(v_exp[2,"RDA1"]*100,digits = 2),"%)",sep = ""), y = paste("RDA2 (",round(v_exp[2,"RDA2"]*100,digits = 2),"%)",sep = "")) +
-				ggplot_theme("bottom") +
+				ggplot_theme(leg_pos="bottom", fnt_size=30) +
 				theme(aspect.ratio=1.5)
 	} else {
 
@@ -266,74 +302,37 @@ plot_ordination_ggplot <- function(data, var_fitting, all_stats, v_exp, scale_pa
 		rda_with_ggplot <- ggplot(ggplot_rda) +
 				geom_point(mapping=aes(x=RDA1, y=RDA2, fill=Treatment, shape=TimePoint), color="black", size=20, stroke=3) +
 				coord_fixed() +
-				xlim(c(-2, 2)) +
-				annotate("text", x=-1.7, y=-1.3, label= "Treatment", size=15, fontface="bold") +
-				annotate("text", x=-1.7, y=-1.4, label= "Timepoint", size=15, fontface="bold") +
-				annotate("text", x=-0.9, y=-1.2, label="F", size=15, fontface="bold") +
-				annotate("text", x=-0.9, y=-1.3, label= round(efs[1], digits=2), size=15, fontface="bold") +
-				annotate("text", x=-0.9, y=-1.4, label= round(efs[2], digits=2), size=15, fontface="bold") +
-				annotate("text", x=-0.2, y=-1.2, label="p-value", size=15, fontface="bold") +
-				annotate("text", x=-0.2, y=-1.3, label= round(pvals[1], digits=3), size=15, fontface="bold") +
-				annotate("text", x=-0.2, y=-1.4, label= round(pvals[2], digits=3), size=15, fontface="bold") +
+				annotate("text", x=positions[1], y=positions[2], label= "Treatment", size=15, fontface="bold") +
+				annotate("text", x=positions[1], y=positions[3], label= "Timepoint", size=15, fontface="bold") +
+				annotate("text", x=positions[4], y=positions[5], label="F", size=15, fontface="bold") +
+				annotate("text", x=positions[4], y=positions[2], label= round(efs[1], digits=2), size=15, fontface="bold") +
+				annotate("text", x=positions[4], y=positions[3], label= round(efs[2], digits=2), size=15, fontface="bold") +
+				annotate("text", x=positions[6], y=positions[5], label="p-value", size=15, fontface="bold") +
+				annotate("text", x=positions[6], y=positions[2], label= round(pvals[1], digits=3), size=15, fontface="bold") +
+				annotate("text", x=positions[6], y=positions[3], label= round(pvals[2], digits=3), size=15, fontface="bold") +
 				scale_shape_manual(values=time_shape) +
 				scale_fill_manual(values=treatment_palette) +
 				geom_segment(data=print_arrows, aes(x=0, xend=RDA1, y=0, yend=RDA2), arrow=arrow(length=unit(0.25, "cm")), colour="black", lwd=1) +
-				geom_text_repel(data=print_arrows, aes(x=RDA1, y=RDA2, label=names), col="black", fontface="bold", size=15, max.overlaps=20) +
-				guides(fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
+				geom_text_repel(data=print_arrows, aes(x=RDA1, y=RDA2, label=names), col="black", fontface="bold", size=10, max.overlaps=20) +
+				guides(fill=guide_legend(override.aes=list(shape=22, size=10)), shape=guide_legend(override.aes=list(size=10))) +
 				labs(x = paste("RDA1 (",round(v_exp[2,"RDA1"]*100,digits = 2),"%)",sep = ""), y = paste("RDA2 (",round(v_exp[2,"RDA2"]*100,digits = 2),"%)",sep = "")) +
-				ggplot_theme("bottom") +
+				ggplot_theme(leg_pos="bottom", fnt_size=30) +
 				theme(aspect.ratio=1.5)
 	}
 
 	return(rda_with_ggplot)
 }
 
-# create consistent theme for all ggplots
-ggplot_theme <- function(leg_pos="right", ang_le=0, fnt_sz=50) {
-
-	if (ang_le == 45) {
-		# set theme
-		theme_bw() +
-		theme(text=element_text(size=fnt_sz, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_sz), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(angle=ang_le, hjust=1, vjust=1, color="black", size=fnt_sz), axis.text.y=element_text(color="black", size=fnt_sz), strip.text=element_text(size=fnt_sz), panel.spacing = unit(3, "lines"))
-	} else if (ang_le == 90) {
-		# set theme
-		theme_bw() +
-		theme(text=element_text(size=fnt_sz, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_sz), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(angle=ang_le, hjust=0.5, vjust=1, color="black", size=fnt_sz), axis.text.y=element_text(color="black", size=fnt_sz), strip.text=element_text(size=fnt_sz), panel.spacing = unit(3, "lines"))
-	} else {
-		# set theme
-		theme_bw() +
-		theme(text=element_text(size=fnt_sz, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_sz), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(color="black", size=fnt_sz), axis.text.y=element_text(color="black", size=fnt_sz), strip.text=element_text(size=fnt_sz), panel.spacing = unit(3, "lines"))
-	}
-}
-
-# export images in case they are needed
-export_svg <- function(filename, a_plot, width=22, height=22, base=F, as_rds=F) {
-
-	# if plot is made with ggplot2
-	if (base==F) {
-		# plot
-		svg(paste0(filename, ".svg"), width=width, height=height)
-			plot(a_plot)
-		dev.off()
-
-	# else with base R
-	} else {
-		# export plot as svg
-		svg(paste0(filename, ".svg"), width=width, height=height)
-			a_plot
-		dev.off()
-	}
-	if (as_rds ==T) {
-		saveRDS(a_plot, paste0(filename, ".Rds"))
-	}
-}
-
 # plot that mimic the pairs function of base R
 ggplot_pairs <- function(data, vars_to_plot, colour_by, n_cols, normalised=T) {
 
-	# normalised?
+	# debug
+#	data <- no_nas ; vars_to_plot <- interesting_params[[intp]] ; colour_by <- "TimePoint" ; n_cols <- plot_cols[[intp]] ; normalised <- T
+
 	if (normalised ==T ) {
 		vars_to_plot <- paste0("norm_", vars_to_plot)
+	} else {
+		# nothing to do ;)
 	}
 
 	# melt the table
@@ -403,6 +402,9 @@ ggplot_pairs <- function(data, vars_to_plot, colour_by, n_cols, normalised=T) {
 # imputation for partial RDA
 impute_missing <- function(imputed_metadata, phylo_obj, sel_vars){
 
+	# debug
+	# imputed_metadata <- centered_metadata_qpcr ; phylo_obj <- centered_phylo_qpcr ; sel_vars <- selected_vars_qpcr
+
 	# for the remaining columns (if any!), fill the NA with
 	# the median value computed using the available values
 	# that are collected from the biological replicates
@@ -454,6 +456,9 @@ impute_missing <- function(imputed_metadata, phylo_obj, sel_vars){
 # imputation for partial RDA
 impute_missing_xna <- function(imputed_metadata, phylo_obj, sel_vars){
 
+	# debug
+	# imputed_metadata <- centered_metadata_subset[which(centered_metadata_subset$DNA_RNA==xna)] ; phylo_obj <- centered_phylo_data ; sel_vars <- selected_vars
+
 	# for the remaining columns (if any!), fill the NA with
 	# the median value computed using the available values
 	# that are collected from the biological replicates
@@ -503,3 +508,80 @@ first_capital <- function(strng) {
 	substr(strng, 1, 1) <- toupper(substr(strng, 1, 1))
 	return(strng)
 }
+
+# mm to inch
+mm_to_inch <- function(mm) mm / 25.4
+
+# export images for publication
+export_figs_tabs <- function(filename, a_plot, width=420, height=394, a_table=NULL, base=F, as_rds=F) {
+	if (base == FALSE) {
+		# plot
+		svg(paste0(filename, ".svg"), width=mm_to_inch(width), height=mm_to_inch(height))
+			plot(a_plot)
+		dev.off()
+	} else {
+		# plot
+		svg(paste0(filename, ".svg"), width=mm_to_inch(width), height=mm_to_inch(height))
+			a_plot
+		dev.off()
+	}
+	# if table is TRUE
+	if (!is.null(a_table)) {
+		# export
+		write.table(a_table, paste0(filename, ".csv"), row.names=F, col.names=T, sep="\t", quote=F)
+	}
+	if (as_rds ==T) {
+		saveRDS(a_plot, paste0(filename, ".Rds"))
+	}
+}
+
+# create consistent theme for all ggplots
+ggplot_theme <- function(leg_pos="right", ang_le=0, fnt_size=20) {
+	if (ang_le == 45) {
+		# set theme
+		theme_bw() +
+		theme(text=element_text(size=fnt_size, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_size), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(angle=ang_le, hjust=1, vjust=1, color="black", size=fnt_size), axis.text.y=element_text(color="black", size=fnt_size), strip.text=element_text(size=fnt_size), plot.margin=margin(0.5, 0.5, 0.5, 0.5, unit="cm"), legend.key.size = unit(3,"line"), panel.spacing = unit(1, "lines"))
+	} else if (ang_le == 90) {
+		# set theme
+		theme_bw() +
+		theme(text=element_text(size=fnt_size, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_size), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(angle=ang_le, hjust=0.5, vjust=1, color="black", size=fnt_size), axis.text.y=element_text(color="black", size=fnt_size), strip.text=element_text(size=fnt_size), plot.margin=margin(0.5, 0.5, 0.5, 0.5, unit="cm"), legend.key.size = unit(3,"line"), panel.spacing = unit(1, "lines"))
+	} else {
+		# set theme
+		theme_bw() +
+		theme(text=element_text(size=fnt_size, color="black"), legend.position=leg_pos, legend.text=element_text(size=fnt_size), legend.key.height=unit(1,'cm'), plot.title=element_text(hjust=0.5), axis.text.x=element_text(color="black", size=fnt_size), axis.text.y=element_text(color="black", size=fnt_size), strip.text=element_text(size=fnt_size), plot.margin=margin(0.5, 0.5, 0.5, 0.5, unit="cm"), legend.key.size = unit(3,"line"), panel.spacing = unit(1, "lines"))
+	}
+}
+
+# export tables for blast
+export_blast_tables <- function(sequence_table, path_to_blast, seqs=300) {
+
+#	sequence_table <- blast_table ; seqs <- 300
+
+	print("exporting tables")
+
+	# tot seqs per file
+	start <- 1
+	stop <- seqs
+	module <- length(blast_table) %% stop
+
+	# export tables until there are no more sequences
+	while (start < length(blast_table)) {
+		# if end is bigger than the number of sequences
+		if (stop > length(blast_table)) {
+			# set new stop
+			stop <- length(blast_table)
+			# export table
+			write.table(blast_table[start:stop], paste0(path_to_blast, "blast_table_", start, "_", stop, ".txt"), quote=F, col.names=F, row.names=F, sep="\t")
+			# update start to invalidate the while and stop
+			start <- length(blast_table) + 1
+		# otherwise
+		} else {
+			# export table
+			write.table(blast_table[start:stop], paste0(path_to_blast, "blast_table_", start, "_", stop, ".txt"), quote=F, col.names=F, row.names=F, sep="\t")
+			# set new start and new stop
+			start <- stop + 1
+			stop <- stop + seqs
+		}
+	}
+}
+

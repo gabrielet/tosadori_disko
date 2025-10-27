@@ -23,7 +23,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn))
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/home/gabriele/work/microbiology/disko2013/"
 path_to_exp <- paste0(root_path, orgn_dir, xna, "/")
 path_to_refs <- paste0(path_to_exp, "references_fastq/")
 path_to_csvs <- paste0(root_path, orgn_dir, "files_for_analysis/")
@@ -73,6 +73,9 @@ for (smpl in c(1:nrow(infoSample))) {
 	# headers are used to identify a sample. so, for all the sequences starting with
 	# a sample-specific couple of primers (fwd, rev), we need to find shared headers
 	matchingHeads <- intersect(reV$header, fwD$header)
+
+######	debug only
+######	write.table(matchingHeads, "/home/gabriele/work/microbiology/disko2013/analyses_bacteria/AD006/matching_heads.csv", quote=F, row.names=F, col.names=F
 
 	# now get headers-corresponding lines from the two primers files, no matter the
 	# direction of the reads. the important thing is that each line is a read

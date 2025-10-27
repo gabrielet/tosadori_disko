@@ -16,7 +16,7 @@ library("phyloseq")
 library("vegan")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
@@ -31,7 +31,8 @@ if (orgn == "bacteria") {
 }
 
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
+#taxa_algo <- "idtaxa" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name, " CLUSTERED WITH ", clust_method, " TAXA ASSIGNED WITH ", taxa_algo))
 
@@ -39,72 +40,163 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
 path_to_taxa <- paste0(path_to_exp, clust_method, "/")
 save_img <- paste0(path_to_taxa, "figures/", taxa_algo, "/")
-save_phylo <- paste0(path_to_taxa, "phyloseq_renamed_test/", taxa_algo, "/")
-
-# this is the path to the outputs of dada
-path_to_counts <- paste0(path_to_exp, "dada_files/tables/")
+save_phylo <- paste0(path_to_taxa, "phyloseq/", taxa_algo, "/")
 
 # if directories do not exist, create it
 ifelse(dir.exists(save_img), TRUE, dir.create(save_img, recursive=T))
 ifelse(dir.exists(save_phylo), TRUE, dir.create(save_phylo, recursive=T))
 
-# and to taxonomy
+# path to taxonomy
 path_to_taxonomy <- paste0(path_to_exp, clust_method, "/taxonomy/")
+# this is the path to the outputs of dada
+path_to_counts <- paste0(path_to_exp, "dada_files/tables/")
 
 ########################### select threshold for filtering bad assignments ###########################
 
-print("IMPORTING TAXONOMY AND COUNTS TABLES")
-
-# NBC bootstrap
-boot_filter <- 80
+print("IMPORTING TAXONOMY, COUNTS, AND METADATA TABLES")
 
 # import counts
-dada_counts <- readRDS(paste0(path_to_counts, "counts_table_ASV.Rds"))
+if (orgn == "fungi") {
+	print("load OTUs")
+	dada_counts <- readRDS(paste0(path_to_taxonomy, "counts_table_OTU_ITSx.Rds"))
+} else {
+	print("load ASVs")
+	dada_counts <- readRDS(paste0(path_to_counts, "counts_table_ASV.Rds"))
+}
 
 # rename rownames to match metadata sample names
 rownames(dada_counts) <- sapply(strsplit(rownames(dada_counts), "_"), "[", 1)
 
 # taxonomy created through naive bayes classifier
-dada_taxonomy <- readRDS(paste0(path_to_taxonomy, "taxonomy_table_boot_", boot_filter, "_", taxa_algo, "_", clust_method, ".Rds"))
+dada_taxonomy <- readRDS(paste0(path_to_taxonomy, "taxonomy_table_boot_", boot, "_", taxa_algo, "_", clust_method, ".Rds"))
+
+# load DNA metadata, the new version from Jana
+metadata_dna <- as.data.frame(read.csv("/mnt/cinqueg/gabriele/work/microbiology/disko2013/metadata/csv_original/Disko2013_warming_control_metadata_updated_removed_few_vars.csv", sep="\t", header=T, stringsAsFactors=TRUE))
 
 ######### CLEAN TAXA TABLE AND UNIDENTIFIED ORGANISMS #########
 
 print("CLEANING ASVs/OTUs TABLE")
 
-# subset taxonomy table
-taxa_tab_clean <- dada_taxonomy[which(rownames(dada_taxonomy) %in% colnames(dada_counts)), ]
-
+# subset taxonomy table using assigned only
 if (orgn == "bacteria") {
 	# get bacteria and archaea only from taxa table
-	bacteria_only <- grep("Bacteria|Archaea", taxa_tab_clean[, "Kingdom"])
+	bacteria_only <- rownames(as.data.frame(dada_taxonomy)[grepl("Bacteria|Archaea", dada_taxonomy[, 1]), ])
+	not_bacteria <- rownames(as.data.frame(dada_taxonomy)[!grepl("Bacteria|Archaea", dada_taxonomy[, 1]), ])
+
+	print("percentage of reads belonging to bacteria/archaea")
+	print(sum(dada_counts[, not_bacteria])/sum(dada_counts))
+
 	# if we have at least one bacteria
 	if (length(bacteria_only) > 1) {
 		# get it
-		taxa_tab_clean <- taxa_tab_clean[bacteria_only, ]
+		taxa_tab_clean <- dada_taxonomy[bacteria_only, ]
+		# column for table
+		assigned_count <- cbind.data.frame(sampleID=rownames(dada_counts), identified=rowSums(dada_counts[, bacteria_only]))
+	} else {
+		print("THERE ARE NO BACTERIA")
 	}
-} else if (orgn == "fungi") {
-	# get fungi only from taxa table
-	fungi_only <- grep("Fungi", taxa_tab_clean[, "Kingdom"])
+
+	# search for mitochondria and chloroplasts, in the bacterial taxa
+	is_mito <- vector()
+	is_chloro <- vector()
+
+	# loop through rows in taxa_tab_clean. one row is one taxa
+	# we have a total of i rows
+	for (i in c(1:nrow(taxa_tab_clean))) {
+		# loop through cols. on col is on taxonomic level
+		# we have j taxonomic levels. i.e. j will range in [1-7]
+		for (j in c(1:ncol(taxa_tab_clean))) {
+			# create label specifying the taxonomic level we are currently analysing
+			tlabel <- tolower(substr(colnames(taxa_tab_clean)[j], 1, 1))
+			# if NA, then kingdom_na, uncultured or unknown is found
+			if (length(grep("NA|nassigned|[u|U]ncultured|nknown|nidentified", taxa_tab_clean[i, j])) > 0 | is.na(taxa_tab_clean[i, j])) {
+				# assign the Unidentified label at the specific, undidentified
+				# taxonomic level
+				taxa_tab_clean[i, j] <- paste0(tlabel, "__Unidentified")
+			# if mitochondria is found
+			} else if (length(grep("itochond", taxa_tab_clean[i, j])) > 0) {
+				# store its position, i.e. the row number
+				is_mito <- append(is_mito, i)
+			# if chloroplast is found
+			} else if (length(grep("hloropla", taxa_tab_clean[i, j])) > 0) {
+				# store its position, i.e. the row number
+				is_chloro <- append(is_chloro, i)
+			# if a suspicious case is found
+			} else {
+				# add tlabel if the taxa_algo was NBC
+				if (taxa_algo=="NBC" | taxa_algo=="BLAST") {
+					taxa_tab_clean[i, j] <- paste0(tlabel, "__", taxa_tab_clean[i, j])
+				}
+			}
+		}
+	}
+
+	# remove mito and chloro from taxa_tab_clean, all at once
+	to_be_removed <- c(unique(is_mito), unique(is_chloro))
+	if (length(to_be_removed) >= 1) {
+		print(paste0(length(unique(is_mito)), " mitochondria found. removing them!"))
+		print(paste0(length(unique(is_chloro)), " chloroplasts found. removing them!"))
+		# remove rows that should be removed
+		taxa_tab_clean <- taxa_tab_clean[-to_be_removed, ]
+	}
+# fungi otherwise
+} else {
+
+	metadata_dna$sampleID <- gsub("B0", "F0", metadata_dna$sampleID)
+	metadata_dna$sampleID <- gsub("B1", "F1", metadata_dna$sampleID)
+	# find unassinged kingdoms
+	#kingdom_na <- rownames(dada_taxonomy[is.na(dada_taxonomy[, 1]), ])
+	not_fungi <- rownames(as.data.frame(dada_taxonomy)[!dada_taxonomy[, 1] %in% "k__Fungi", ])
+	# find fungi only
+	fungi_only <- rownames(as.data.frame(dada_taxonomy)[dada_taxonomy[, 1] %in% "k__Fungi", ])
+
+	print("percentage of reads belonging fungi")
+	print(sum(dada_counts[, not_fungi])/sum(dada_counts))
+
 	# if we have at least one fungus
-	if (length(fungi_only) > 1) {
+	if (length(fungi_only) >= 1) {
 		# get it
-		taxa_tab_clean <- taxa_tab_clean[fungi_only, ]
+		taxa_tab_clean <- dada_taxonomy[fungi_only, ]
+		# column for table
+		assigned_count <- cbind.data.frame(sampleID=rownames(dada_counts), identified=rowSums(dada_counts[, fungi_only]))
+	} else {
+		print("THERE ARE NO FUNGI")
 	}
 }
 
-print(paste0("ASVs/OTUs we are actually using after selecting fungi only ", nrow(taxa_tab_clean), " which correspond to ", length(unique(taxa_tab_clean[, "Genus"])), " Genus"))
+print(paste0("ASVs/OTUs we are actually using after selecting fungi only: ", nrow(taxa_tab_clean), " which correspond to ", length(unique(taxa_tab_clean[, "Genus"])), " Genera"))
+
+# load dada output
+dada_table <- read.csv(paste0(path_to_counts, "dada_filtering_steps.csv"), header=T, sep="\t")
+
+
+# add info
+metadata_rna <- metadata_dna
+metadata_rna$DNA_RNA <- gsub("DNA", "RNA", metadata_rna$DNA_RNA)
+metadata_rna$sampleID <- gsub("AD006", "AD012", metadata_rna$sampleID)
+metadata_rna$ligation_tag <- gsub("AD006", "AD012", metadata_rna$ligation_tag)
+
+metadata_dna_rna <- rbind.data.frame(metadata_dna, metadata_rna)
+dada_table_complete <- merge(metadata_dna_rna, merge(cbind.data.frame(sampleID=rownames(dada_counts), dada_table), assigned_count, by="sampleID"), by="sampleID")
+
+# export
+write.table(dada_table_complete, paste0(path_to_counts, "dada_with_identified.csv"), quote=F, row.names=F, sep="\t")
+
+######### GET THE COUNTS TABLE READY #########
+
+print("OTU TABLE IN PREPARATION")
 
 # transpose dada_counts for good
 dada_counts <- t(dada_counts)
 
-# remove undefined ASVs using rownames from counts
-dada_counts <- dada_counts[which(rownames(dada_counts) %in% rownames(taxa_tab_clean)), ]
+# remove undefined ASVs/OTUs
+dada_counts <- dada_counts[rownames(taxa_tab_clean), ]
 
 # print some info for the paper
 print("SOME INFO FOR THE PAPER AFTER THE CLEANING")
@@ -114,86 +206,12 @@ print(paste0("RNA AVERAGE READS ", ceiling(mean(colSums(dada_counts)[grep("AD012
 print(paste0("DNA TOTAL READS ", sum(colSums(dada_counts)[grep("AD006", colnames(dada_counts))])))
 print(paste0("RNA TOTAL READS ", sum(colSums(dada_counts)[grep("AD012", colnames(dada_counts))])))
 
-# search for mitochondria and chloroplasts, in the bacterial taxa
-is_mito <- vector()
-is_chloro <- vector()
-
-# loop through rows in taxa_tab_clean. one row is one taxa
-# we have a total of i rows
-for (i in c(1:nrow(taxa_tab_clean))) {
-	# loop through cols. on col is on taxonomic level
-	# we have j taxonomic levels. i.e. j will range in [1-7]
-	for (j in c(1:ncol(taxa_tab_clean))) {
-		# create label specifying the taxonomic level we are currently analysing
-		tlabel <- tolower(substr(colnames(taxa_tab_clean)[j], 1, 1))
-		# if NA, then unassigned, uncultured or unknown is found
-		if (length(grep("NA|nassigned|[u|U]ncultured|nknown|nidentified", taxa_tab_clean[i, j])) > 0 | is.na(taxa_tab_clean[i, j])) {
-			# assign the Unidentified label at the specific, undidentified
-			# taxonomic level
-			taxa_tab_clean[i, j] <- paste0(tlabel, "__Unidentified")
-		# if mitochondria is found
-		} else if (length(grep("itochond", taxa_tab_clean[i, j])) > 0) {
-			# store its position, i.e. the row number
-			is_mito <- append(is_mito, i)
-		# if chloroplast is found
-		} else if (length(grep("hloropla", taxa_tab_clean[i, j])) > 0) {
-			# store its position, i.e. the row number
-			is_chloro <- append(is_chloro, i)
-		# if a suspicious case is found
-		} else {
-			# add tlabel if the taxa_algo was NBC
-			if (taxa_algo=="NBC" | taxa_algo=="BLAST") {
-				taxa_tab_clean[i, j] <- paste0(tlabel, "__", taxa_tab_clean[i, j])
-			}
-		}
-	}
-}
-
-# remove mito and chloro from taxa_tab_clean, all at once
-to_be_removed <- c(unique(is_mito), unique(is_chloro))
-if (length(to_be_removed) > 1) {
-	print(paste0(length(unique(is_mito)), " mitochondria found. removing them!"))
-	print(paste0(length(unique(is_chloro)), " chloroplasts found. removing them!"))
-	# remove rows that should be removed
-	taxa_tab_clean <- taxa_tab_clean[-to_be_removed, ]
-}
-
-# remove non-bacterial ASVs using rownames from counts
-# counts are now clean and ready to use
-dada_counts <- dada_counts[which(rownames(dada_counts) %in% rownames(taxa_tab_clean)), ]
-
-# remove weird taxonomy levels, i.e. g__g__, or similar
-if (orgn == "fungi") {
-	taxa_tab_clean <- gsub("k__k__", "k__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("p__p__", "p__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("c__c__", "c__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("o__o__", "o__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("f__f__", "f__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("g__g__", "g__", taxa_tab_clean)
-	taxa_tab_clean <- gsub("s__s__", "s__", taxa_tab_clean)
-}
-
 # export the full taxa table, now cleaned
 write.table(taxa_tab_clean, paste0(save_phylo, "taxa_tab_clean_DNA_and_RNA_", exp_name, ".csv"), row.names=F, col.names=TRUE, sep="\t")
-
-# print out percentage of unidentified
-for (i in 1:6) {
-	perc <- round((length(grep("Unidenti", taxa_tab_clean[, i]))/nrow(taxa_tab_clean))*100, digits=1)
-	print(paste0("the percentage of unidentified at ", colnames(taxa_tab_clean)[i], " level is equal to ", perc))
-}
 
 ######### GET COUNTS AND CLEAN IT BEFORE CREATING PHYLOSEQ OBJS THE CREATE PHYLO OBJS #########
 
 print("CREATING PHYLOSEQ OBJECTS")
-
-# load DNA metadata, the new version from Jana
-metadata_dna <- as.data.frame(read.csv("/microbiology/disko2013/metadata/csv_original/Disko2013_warming_control_metadata_updated_removed_few_vars.csv", sep="\t", header=T, stringsAsFactors=TRUE))
-
-# if orgn is fungi, modify the labels of the sample names
-if (orgn == "fungi") {
-	metadata_dna$sampleID <- gsub("B0", "F0", metadata_dna$sampleID)
-	metadata_dna$sampleID <- gsub("B1", "F1", metadata_dna$sampleID)
-}
 
 # metadata for RNA samples are also needed. to create them
 # start by creating a copy of the data from DNA samples, since
@@ -261,9 +279,6 @@ phylo_data <- phyloseq(otu_table(dada_counts_clean, taxa_are_rows=TRUE), meta_ph
 # we only kept Warming and Controls, hence some taxa that
 # were only found in, for instance, Shrub-Removal samples
 # are now all zero and we need to remove them.
-# as mentioned here https://joey711.github.io/phyloseq-demo/Restroom-Biogeography.html
-# indeed `any(taxa_sums(phylo_data) == 0)` being TRUE is
-# something to investigate
 phylo_data <- prune_taxa(taxa_sums(phylo_data) > 0, phylo_data)
 
 # 2. transform counts using hellinger transformation
@@ -303,11 +318,14 @@ plot_read_num <- ggplot(read_sums, aes(x=sorted, y=nreads)) +
 	ggtitle("Total number of reads") +
 	scale_y_log10() +
 	facet_wrap(~type, 1, scales="free") +
+	geom_hline(data=data.frame(xint=1000, type="Samples"), aes(yintercept=xint), linetype = "dashed", color="red") +
+	geom_hline(data=data.frame(xint=2000, type="Samples"), aes(yintercept=xint), linetype = "dashed", color="orange") +
+	geom_hline(data=data.frame(xint=4000, type="Samples"), aes(yintercept=xint), linetype = "dashed", color="green") +
 	theme(text=element_text(size=15, face="bold"), legend.position="right") +
 	theme_bw()
 
 # plot
-export_svg(paste0(save_img, "read_distribution_", exp_name, ".svg"), plot_read_num)
+export_figs_tabs(paste0(save_img, "read_distribution_", exp_name), plot_read_num, width=168*2, height=168*1.5, a_table=NULL)
 
 ######### CREATING QPCR DATA TABLE AND PHYLOSEQ OBJECT #########
 
@@ -353,16 +371,7 @@ phylo_data_qpcr <- phyloseq(otu_table(dada_counts_clean, taxa_are_rows=TRUE), me
 # we only kept Warming and Controls, hence some taxa that
 # were only found in, for instance, Shrub-Removal samples
 # are now all zero and we need to remove them.
-# as mentioned here https://joey711.github.io/phyloseq-demo/Restroom-Biogeography.html
-# indeed `any(taxa_sums(phylo_data) == 0)` being TRUE is
-# something to investigate
 phylo_data_qpcr <- prune_taxa(taxa_sums(phylo_data_qpcr) > 0, phylo_data_qpcr)
-
-# IMPORTANT: the number of taxa for qPCR is expected to be lower than
-# the n. of taxa in the phylo_data objects. This is because for qPCR
-# we are using DNA-taxa only while phylo_data also comprise RNA-taxa
-# so this object should be same as phylo_data_qpcr:
-# try_me <-prune_samples(as.character(sample_data(phylo_data)$sampleID[which(sample_data(phylo_data)$DNA_RNA == "DNA")]), phylo_data); prune_taxa(taxa_sums(try_me) > 0, try_me)
 
 # 1.1 transform counts using hellinger transformation
 # https://github.com/joey711/phyloseq/issues/585

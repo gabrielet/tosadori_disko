@@ -20,14 +20,22 @@ library("nlme")
 library("mirlyn")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
 exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria" ; clust_method <- "ASV"
 
+# select the clustering method. for bacteria is ASV
+if (orgn == "bacteria") {
+	clust_method <- "ASV"
+# for fungi is OTU
+} else if (orgn == "fungi") {
+	clust_method <- "OTU"
+}
+
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name))
 
@@ -35,7 +43,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -93,6 +101,7 @@ for (xna in names(phylo_xna)) {
 
 	for (an_index in c("Observed", "Shannon", "Simpson")) {
 
+#		an_index <- "Shannon"
 		if (rarefy == TRUE) {
 			print("rarefaction TRUE")
 			# rarefy samples
@@ -138,7 +147,6 @@ for (xna in names(phylo_xna)) {
 		timepoint_palette <- hue_pal()(3)
 		names(timepoint_palette) <- c("June", "July", "August")
 
-
 		# set colnames
 		colnames(richness_data[[xna]]) <- c("sampleID", "col_index", "Treatment", "TimePoint", "CollectionSite")
 
@@ -155,24 +163,18 @@ for (xna in names(phylo_xna)) {
 
 		sink()
 
-		# set factors
 		richness_data[[xna]]$TimePoint <- factor(richness_data[[xna]]$TimePoint, levels=c("June", "July", "August"))
 
 		# set lims
-		if (an_index == "Shannon") {
-			ax_lims <- c(4.8, 6.2)
-		} else if (an_index == "Simpson"){
-			ax_lims <- c(0.985, 1)
-		} else {
-			ax_lims <- c(350, 750)
-		}
+		ax_lims <- c(min(richness_data[[xna]]$col_index), max(richness_data[[xna]]$col_index))
 
 		# plot by timepoint
-		if (an_index == "Shannon" | an_index == "Simpson") {
-			sp_time <- ggplot(richness_data[[xna]], aes(x=Treatment, y=col_index, fill=Treatment)) +
+		sp_time <- ggplot(richness_data[[xna]], aes(x=Treatment, y=col_index, fill=Treatment)) +
 					geom_boxplot(key_glyph="point") +
 					geom_point(size=2, alpha=1) +
 					scale_fill_manual(values=treatment_palette) +
+		#			stat_compare_means(method="wilcox", paired=T) +
+		#			ggtitle(paste0(an_index, " index in ", xna, " samples")) +
 					ggtitle("") +
 					xlab("") +
 					ylim(ax_lims[1], ax_lims[2]) +
@@ -181,22 +183,6 @@ for (xna in names(phylo_xna)) {
 					guides(fill=guide_legend(override.aes=list(size=20, shape=22)), ncol=2) +
 					ggplot_theme(leg_pos="bottom", ang_le=45) +
 					theme(axis.text.x=element_blank())
-		} else {
-			sp_time <- ggplot(richness_data[[xna]], aes(x=Treatment, y=col_index, fill=Treatment)) +
-					geom_boxplot(key_glyph="point") +
-					geom_point(size=2, alpha=1) +
-					scale_fill_manual(values=treatment_palette) +
-					ggtitle("") +
-					xlab("") +
-					ylab(paste0(an_index, "'s diversity")) +
-					facet_wrap(~TimePoint) +
-					guides(fill=guide_legend(override.aes=list(size=20, shape=22)), ncol=2) +
-					ggplot_theme(leg_pos="bottom", ang_le=45) +
-					theme(axis.text.x=element_blank())
-		}
-
-		# plot boxplots
-		export_svg(paste0(save_alphadiv, rarefied, an_index, "_boxplots_by_time_point_", xna, "_", exp_name), sp_time, as_rds=T)
 
 		all_index_dna_rna <- rbind.data.frame(all_index_dna_rna, cbind.data.frame(richness_data[[xna]], xna, an_index))
 	}
@@ -219,9 +205,11 @@ for (an_index in c("Observed", "Shannon", "Simpson")) {
 		# the plot
 		tmp_time_xna[[a_time]] <- ggplot(pvals_subset[pvals_subset$TimePoint==a_time, ], aes(x=xna, y=col_index, fill=Treatment)) +
 					geom_boxplot(key_glyph="point") +
+					#geom_point(size=2, alpha=1, position = position_dodge(width = 0.75)) +
 					scale_fill_manual(values=treatment_palette) +
 					ggtitle(a_time) +
 					xlab("") +
+					#ylim(0.986, 0.998) +
 					ylab(paste0(an_index)) +
 					guides(fill=guide_legend(override.aes=list(size=20, shape=22))) +
 					geom_pwc(aes(group=xna), method = "wilcox.test", label = "p.signif", size=1, label.size=15, color="black", linetype=1, hide.ns=T) +
@@ -233,6 +221,7 @@ for (an_index in c("Observed", "Shannon", "Simpson")) {
 		# the plot
 		tmp_time[[xna]] <-  ggplot(pvals_subset, aes(x=Treatment, y=col_index, fill=Treatment)) +
 					geom_boxplot(key_glyph="point") +
+					#geom_point(size=2, alpha=1, position = position_dodge(width = 0.75)) +
 					scale_fill_manual(values=treatment_palette) +
 					ggtitle("") +
 					xlab("") +
@@ -252,18 +241,18 @@ for (an_index in c("Observed", "Shannon", "Simpson")) {
 					cowplot::plot_grid(tmp_time_xna[["June"]] + theme(legend.position = "none"),
 							tmp_time_xna[["July"]] + theme(legend.position = "none", axis.text.y=element_blank(), axis.title.y=element_blank()),
 							tmp_time_xna[["August"]] + theme(legend.position = "none", axis.text.y=element_blank(), axis.title.y=element_blank()),
-							ncol=3, rel_widths=c(1.8, 1, 1)
+							ncol=3, align="vh", axis="tblr", labels="A", label_size = 50
 							),
 					cowplot::plot_grid(tmp_time[["DNA"]] + theme(legend.position = "none", axis.text.x=element_blank()),
 							tmp_time[["RNA"]] + theme(legend.position = "none"),
-							nrow=2, rel_heights=c(1,1.3)
+							nrow=2, align="vh", axis="tblr", labels=c("B", "C"), label_size = 50
 							),
 					ncol=2, rel_widths=c(1,1)
 					),
 			the_legend, nrow=2, rel_heights=c(1, 0.1)
 			)
 	# export
-	export_svg(paste0(save_alphadiv, "DNA_RNA_", rarefied, an_index, "_boxplots_by_time_point_", exp_name), sp_time_xna, width=26, height=26, as_rds=T)
+	export_figs_tabs(paste0(save_alphadiv, "DNA_RNA_", rarefied, an_index, "_boxplots_by_time_point_", exp_name), sp_time_xna, as_rds=F, width=168*3, height=168*3)
 
 }
 

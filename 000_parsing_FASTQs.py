@@ -10,7 +10,7 @@ def parsing_fastqs(xna, orgn, save_in):
 	import sys
 
 	# path to where the parsed files will be stored
-	root_path="/microbiology/disko2013/"
+	root_path="/home/gabriele/work/microbiology/disko2013/"
 	wobble_path=root_path+"analyses_"+orgn+"/files_for_analysis/"
 	fastq_path=root_path+"fastq/"
 

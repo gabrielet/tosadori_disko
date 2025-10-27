@@ -16,21 +16,23 @@ library("ggvegan")
 library("RColorBrewer")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
 exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria"
 
-# select the clustering method
+# select the clustering method. for bacteria is ASV
 if (orgn == "bacteria") {
 	clust_method <- "ASV"
+# for fungi is OTU
 } else if (orgn == "fungi") {
 	clust_method <- "OTU"
 }
 
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
+#taxa_algo <- "idtaxa" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name))
 
@@ -38,7 +40,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -72,15 +74,9 @@ centered_metadata_qpcr <- sample_data(centered_phylo_qpcr)
 # rename cols for plotting
 colnames(centered_metadata_qpcr) <- c("sampleID", "DNA_RNA", "Treatment", "TimePoint", "CollectionSite", "mcrA", "mxaF", "nifH", "nirS", "nosZ", "soil_fresh", "soil_dry")
 
-## and the features selections
-#forward_selection <- list()
-
 ######################################################################## PERFORMING PARTIAL RDA ON DNA and RNA SEPARATELY
 
 print("PERFORMING PARTIAL RDA ON DNA AND RNA, SEPARATELY")
-
-# list environmental pararameters that might require imputation
-selected_vars_qpcr <- colnames(centered_metadata)[c(6:ncol(centered_metadata))]
 
 # define list for agglomerated, using tax_glom(), phylo objects
 phylo_glom_xna <- list()
@@ -109,6 +105,8 @@ for (xna in c("DNA", "RNA")) {
 
 	print(paste0("analysing ", xna))
 
+#	xna <- "DNA";
+
 	# subset cols
 	centered_metadata_subset <- centered_metadata[, c("sampleID", "DNA_RNA", "Treatment", "TimePoint", "CollectionSite", selected_vars)]
 
@@ -122,15 +120,7 @@ for (xna in c("DNA", "RNA")) {
 	phylo_xna <- prune_samples(as.character(imputed_metadata$sampleID[which(imputed_metadata$DNA_RNA == xna)]), imputed_phylo)
 
 	# remove ASVs which are always zero for the subset under consideration
-	# to do so, with clr transformation, find how many zeros are found for each row. if the
-	# number of zeros per each row is equal to the length of the row, remove the taxa. here,
-	# the rows which length is different are selected because of the PRUNE way of thinking
 	phylo_xna <- prune_taxa(apply(tax_table(phylo_xna), 1, function(x) length(which(x==0))!=length(x)), phylo_xna)
-
-	# at this point it is required to decide whether the analysis will be performed
-	# at ASV level or at a specific taxonomic level. If ASV level, go ahead. If ASV
-	# level, then the following needs to be un-commented and the following line needs
-	# to be commented in order to not let it work
 
 	# if not aggregating at a specific taxonomic level
 	if(t_level=="ASV" | t_level=="OTU") {
@@ -177,19 +167,16 @@ for (xna in c("DNA", "RNA")) {
 	imputed_meta_glom[[xna]]$TimePoint <- relevel(imputed_meta_glom[[xna]]$TimePoint, ref="June")
 
 	# loop through scaling parameters
-	for (scale_parameter in c(1, 2)) {
+	for (scale_parameter in c(1)) {#, 2)) {
+
+#		scale_parameter <- 1
+
+		source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 		set.seed(131)
 
 		# compute partial RDA using formula
 		invisible(capture.output(mod_selected[[xna]] <- ordinate(phylo_glom_xna[[xna]], "RDA", formula=as.formula(formula_rda))))
-		# same as doing
-#		otu_mat <- as(otu_table(phylo_glom_xna[[xna]]), "matrix")
-#		rda_data <- data.frame(sample_data(phylo_glom_xna[[xna]]))
-#		rda(t(otu_mat)~Treatment+TimePoint+Condition(CollectionSite), data=rda_data)
-		# https://www.rdocumentation.org/packages/vegan/versions/2.6-10/topics/varpart
-#		r_squared <- varpart(t(otu_mat), ~Treatment, ~TimePoint, partial=~CollectionSite, data=rda_data)
-#		r_squared$part$indfrac
 
 		# variance explained by axes
 		variance_expl[[xna]] <- as.data.frame(summary(mod_selected[[xna]])$cont$importance)
@@ -209,10 +196,25 @@ for (xna in c("DNA", "RNA")) {
 		# get stats to plot
 		stats_to_plot[[xna]] <- signif_test_all_vars_partial[[xna]][c(1,2), c(3,4)]
 		colnames(stats_to_plot[[xna]]) <- c("F", "pval")
+
+		# set positions
+		if (orgn == "fungi") {
+			if (xna == "DNA") {
+				positions <- c(0.1, -0.8, -0.9, 0.4, -0.7, 0.7)
+			} else {
+				positions <- c(0.1, -0.8, -0.9, 0.5, -0.7, 0.8)
+			}
+		} else {
+			positions <- c(-0.1, -0.8, -0.9, 0.2, -0.6, 0.5) # bacteria
+		}
+		if (guilded != "") {
+			positions <- c(-6, 10, 11, -2, 12, 1)
+		}
+
 		# create ggplot plot
-		ggplot_scaling <- plot_ordination_ggplot(data=mod_selected[[xna]], var_fitting=var_fitting_enviro[[xna]], all_stats=stats_to_plot[[xna]], v_exp=variance_expl[[xna]], scale_param=scale_parameter)
+		ggplot_scaling <- plot_ordination_ggplot(data=mod_selected[[xna]], var_fitting=var_fitting_enviro[[xna]], all_stats=stats_to_plot[[xna]], v_exp=variance_expl[[xna]], scale_param=scale_parameter, orgn=orgn, positions=positions)
 		# export ggplot
-		export_svg(paste0(save_orderings_partial, "ggplot2_partial_RDA_", xna, "_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_params_clr", withint, guilded), ggplot_scaling, base=FALSE, as_rds=T)
+		export_figs_tabs(paste0(save_orderings_partial, "ggplot2_partial_RDA_", xna, "_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_params_clr", withint, guilded), ggplot_scaling, base=FALSE, as_rds=F, width=168*4, height=168*4)
 	}
 }
 
@@ -225,15 +227,10 @@ if (orgn == "bacteria") {
 	selected_vars_qpcr <- c("nirS", "nosZ", "nifH", "mcrA", "mxaF")
 
 	# make a copy of centered_metadata qpcr to perform imputation
-	imputed_phylo_qpcr <- centered_phylo_qpcr#impute_missing(centered_metadata_qpcr, centered_phylo_qpcr, selected_vars_qpcr)
+	imputed_phylo_qpcr <- impute_missing(centered_metadata_qpcr, centered_phylo_qpcr, selected_vars_qpcr)
 
 	# build imputed phylo qpcr object
-	imputed_metadata_qpcr <- centered_metadata_qpcr#sample_data(imputed_phylo_qpcr)
-
-	# at this point it is required to decide whether the analysis will be performed
-	# at ASV level or at a specific taxonomic level. If ASV level, go ahead. If ASV
-	# level, then the following needs to be un-commented and the following line needs
-	# to be commented in order to not let it work
+	imputed_metadata_qpcr <- sample_data(imputed_phylo_qpcr)
 
 	# if not aggregating at a specific taxonomic level
 	if(t_level=="ASV" | t_level=="OTU") {
@@ -269,11 +266,6 @@ if (orgn == "bacteria") {
 	imputed_enviro_qpcr$Treatment <- relevel(imputed_enviro_qpcr$Treatment, ref="Control")
 	imputed_enviro_qpcr$TimePoint <- relevel(imputed_enviro_qpcr$TimePoint, ref="June")
 
-	# NOTE: the result of this ordination should be the same, if the formula
-	# is the same, as the one that was obtained for DNA since, we are using
-	# the same abundances. What will change is the fitting which will be done
-	# using qPCR variables instead of environmental variables
-
 	# loop through scaling parameters
 	for (scale_parameter in c(1)) { #, 2)) {
 
@@ -289,11 +281,14 @@ if (orgn == "bacteria") {
 		stats_to_plot_qpcr <- signif_test_all_vars_partial[["DNA"]][c(1,2), c(3,4)]
 		colnames(stats_to_plot_qpcr) <- c("F", "pval")
 
+		# set positions
+		positions <- c(-7, 11.5, 10, -3.5, 11.5, -1) # bacteria
+
 		# create ggplot plot
-		ggplot_scaling_qpcr <- plot_ordination_ggplot(data=mod_selected[["DNA"]], var_fitting=var_fitting_qpcr, all_stats=stats_to_plot_qpcr, v_exp=variance_expl[["DNA"]], scale_param=scale_parameter)
+		ggplot_scaling_qpcr <- plot_ordination_ggplot(data=mod_selected[["DNA"]], var_fitting=var_fitting_qpcr, all_stats=stats_to_plot_qpcr, v_exp=variance_expl[["DNA"]], scale_param=scale_parameter, orgn=orgn, positions=positions)
 
 		# export ggplot
-		export_svg(paste0(save_orderings_partial, "ggplot2_partial_RDA_on_qPCR_genes_and_enviro_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_clr", withint, guilded), ggplot_scaling_qpcr, base=FALSE, as_rds=T)
+		export_figs_tabs(paste0(save_orderings_partial, "ggplot2_partial_RDA_on_qPCR_genes_and_enviro_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_clr", withint, guilded), ggplot_scaling_qpcr, base=FALSE, as_rds=F, width=168*4, height=168*4)
 
 	}
 
@@ -302,7 +297,7 @@ if (orgn == "bacteria") {
 		print(var_fitting_qpcr)
 	sink()
 }
-######################## FINALLY, EXPORT EVERYTHING
+######################################################## FINALLY, EXPORT EVERYTHING
 
 ## export forward feature selection
 #saveRDS(forward_selection, paste0(save_orderings_partial, "centered_forward_selection_", exp_name, ".Rds"))
@@ -326,10 +321,10 @@ saveRDS(r_square_partial, paste0(save_orderings_partial, "r_square_partial_", ex
 # export signif_test_all_vars_partial
 saveRDS(signif_test_all_vars_partial, paste0(save_orderings_partial, "signif_test_all_vars_partial_", exp_name, "_", t_level, "_clr", withint, guilded, ".Rds"))
 
-######################## DNA VERSUS RNA
+# DNA VERSUS RNA
 
 # set taxa level of interest
-t_level <- "ASV"
+t_level <- "ASV" #"Guild"
 
 formula_rda <- "phylo_glom~DNA_RNA+TimePoint+Treatment+Condition(CollectionSite)" ; withint <- ""
 
@@ -347,11 +342,6 @@ imputed_metadata$DNA_RNA <- factor(imputed_metadata$DNA_RNA, levels=c("DNA", "RN
 imputed_metadata$Treatment <- relevel(imputed_metadata$Treatment, ref="Control")
 imputed_metadata$TimePoint <- relevel(imputed_metadata$TimePoint, ref="June")
 imputed_metadata$DNA_RNA <- relevel(imputed_metadata$DNA_RNA, ref="DNA")
-
-# at this point it is required to decide whether the analysis will be performed
-# at ASV level or at a specific taxonomic level. If ASV level, go ahead. If ASV
-# level, then the following needs to be un-commented and the following line needs
-# to be commented in order to not let it work
 
 # if not aggregating at a specific taxonomic level
 if(t_level=="ASV" | t_level=="OTU") {
@@ -391,12 +381,12 @@ if(t_level=="ASV" | t_level=="OTU") {
 # get metadata for aggregated-imputed object
 imputed_meta_glom_xna <- sample_data(phylo_glom)
 
-# compute partial RDA using phyloseq function ordinate()
-# https://cran.r-project.org/web/packages/vegan/vignettes/intro-vegan.pdf
-# the problem concerns the how-to select the most significant variables in the model
-
 # loop through scaling parameters
-for (scale_parameter in c(1)) {
+for (scale_parameter in c(1)) { #c(1, 2)) {
+
+#	scale_parameter <- 1
+
+	source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 	set.seed(131)
 
@@ -419,13 +409,21 @@ for (scale_parameter in c(1)) {
 	stats_to_plot_xna <- signif_test_all_vars_partial_xna[c(1,2), c(3,4)]
 	colnames(stats_to_plot_xna) <- c("F", "pval")
 
+	# set positions
+	if (orgn == "fungi") {
+		positions <- c(-0.3, -0.8, -0.9, 0.1, -0.7, 0.4) # fungi
+	} else {
+		positions <- c(-0.6, -1.3, -1.4, -0.3, -1.2, 0) # bacteria
+	}
+	if (guilded != "") {
+		positions <- c(-8, 4, 5, -5, 6, -3) # guilded
+	}
+
 	# create ggplot plot
-	ggplot_scaling <- plot_ordination_ggplot(data=mod_selected_xna, var_fitting=var_fitting_enviro_xna, all_stats=stats_to_plot_xna, v_exp=variance_expl_xna, scale_param=scale_parameter, pattern=T)
+	ggplot_scaling <- plot_ordination_ggplot(data=mod_selected_xna, var_fitting=var_fitting_enviro_xna, all_stats=stats_to_plot_xna, v_exp=variance_expl_xna, scale_param=scale_parameter, orgn=orgn, positions=positions)
 
 	# export ggplot
-	export_svg(paste0(save_orderings_partial, "ggplot2_partial_RDA_DNA_RNA_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_params_clr", withint, guilded), ggplot_scaling, base=FALSE, as_rds=T)
+	export_figs_tabs(paste0(save_orderings_partial, "ggplot2_partial_RDA_DNA_RNA_", exp_name, "_", t_level, "_scaling_", scale_parameter, "_params_clr", withint, guilded), ggplot_scaling, base=FALSE, as_rds=F, width=168*4, height=168*4)
 
-	# there is also the phyloseq version of the same plots here:
-	# https://github.com/joey711/phyloseq/issues/274#issuecomment-30553161
 }
 

@@ -15,24 +15,23 @@ library("vegan")
 library("RColorBrewer")
 
 # import functions
-source("/microbiology/disko2013/code/000_micro_functions_disko2013.R")
+source("/mnt/cinqueg/gabriele/work/microbiology/disko2013/code/000_micro_functions_disko2013.R")
 
 ######### SELECT EXPERIMENT AND DEFINE PATHS #########
 # select exp name
-exp_name <- "submission_final_norejects_dada_new_bootstrap"
+exp_name <- "submission_final_norejects_dada_new_bootstrap" ; orgn <- "bacteria"
 
-# select the proper organism
-orgn <- "bacteria"
-
-# select the clustering method
+# select the clustering method. for bacteria is ASV
 if (orgn == "bacteria") {
 	clust_method <- "ASV"
+# for fungi is OTU
 } else if (orgn == "fungi") {
 	clust_method <- "OTU"
 }
 
 # select the taxa assigment method
-taxa_algo <- "NBC"
+taxa_algo <- "NBC" ; boot <- 80
+#taxa_algo <- "idtaxa" ; boot <- 80
 
 print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_name))
 
@@ -40,7 +39,7 @@ print(paste0("THE ANALYSIS IS PERFORMED ON ", orgn, "  EXPERIMENT NAME ", exp_na
 ifelse(orgn=="fungi", orgn_dir <- "analyses_fungi/", orgn_dir <- "analyses_bacteria/")
 
 # set path according to the experiment
-root_path <- "/microbiology/disko2013/"
+root_path <- "/mnt/cinqueg/gabriele/work/microbiology/disko2013/"
 # this is the general path to the experiment
 path_to_exp <- paste0(root_path, orgn_dir, "experiments/", exp_name, "/")
 # this is the path where counts results will be stored
@@ -124,18 +123,18 @@ names(xna_palette) <- c("DNA", "RNA")
 # plot without facets
 plT_xna_site <- ggplot(data_to_plot, aes(x=pcoa_one, y=pcoa_two, fill=dna_rna, shape=treatment)) +
 	geom_point(size=20, color="black", stroke=3) +
-#	geom_text(aes(label=collectionsite), col="black", size=10) +
+	geom_text(aes(label=collectionsite), col="black", size=10) +
 	scale_fill_manual(values=xna_palette) +
 	scale_shape_manual(values=treat_shape) +
 #	ggtitle("PCoA analysis") +
 	ggtitle("") +
 	xlab(paste0("PCoA1 (", perc_var[1], "%)")) +
 	ylab(paste0("PCoA2 (", perc_var[2], "%)")) +
-	guides(fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
-	ggplot_theme(leg_pos="bottom", ang_le=0)
+	guides(fill=guide_legend(override.aes=list(shape=22, size=15)), shape=guide_legend(override.aes=list(size=15))) +
+	ggplot_theme(leg_pos="bottom", ang_le=0, fnt_size=30)
 
 # and export
-export_svg(paste0(save_orderings_simple, "collection_site_GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna_site, as_rds=T)
+export_figs_tabs(paste0(save_orderings_simple, "collection_site_GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna_site, as_rds=T, width=168*3, height=168*3)
 
 # plot without facets
 plT_xna_time <- ggplot(data_to_plot, aes(x=pcoa_one, y=pcoa_two, fill=dna_rna, shape=treatment)) +
@@ -147,27 +146,27 @@ plT_xna_time <- ggplot(data_to_plot, aes(x=pcoa_one, y=pcoa_two, fill=dna_rna, s
 	ggtitle("") +
 	xlab(paste0("PCoA1 (", perc_var[1], "%)")) +
 	ylab(paste0("PCoA2 (", perc_var[2], "%)")) +
-	guides(fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
-	ggplot_theme(leg_pos="bottom", ang_le=0)
+	guides(fill=guide_legend(override.aes=list(shape=22, size=15)), shape=guide_legend(override.aes=list(size=15))) +
+	ggplot_theme(leg_pos="bottom", ang_le=0, fnt_size=30)
 
 # and export
-export_svg(paste0(save_orderings_simple, "timepoint_GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna_time, as_rds=T)
+export_figs_tabs(paste0(save_orderings_simple, "timepoint_GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna_time, as_rds=T, width=168*3, height=168*3)
 
 # plot without facets
 plT_xna <- ggplot(data_to_plot, aes(x=pcoa_one, y=pcoa_two, fill=dna_rna, shape=treatment)) +
-	geom_point(size=20, color="black", stroke=3) +
-#	geom_text(aes(label=collectionsite), col="black", size=10) +
+	geom_point(size=15, color="black", stroke=3) +
+#	geom_text(aes(label=collectionsite), col="black", size=8) +
 	scale_fill_manual(values=xna_palette) +
 	scale_shape_manual(values=treat_shape) +
 #	ggtitle("PCoA analysis") +
 	ggtitle("") +
 	xlab(paste0("PCoA1 (", perc_var[1], "%)")) +
 	ylab(paste0("PCoA2 (", perc_var[2], "%)")) +
-	guides(fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
+	guides(fill=guide_legend(override.aes=list(shape=22, size=15)), shape=guide_legend(override.aes=list(size=15))) +
 	ggplot_theme(leg_pos="bottom", ang_le=0)
 
 # and export
-export_svg(paste0(save_orderings_simple, "GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna, as_rds=T)
+export_figs_tabs(paste0(save_orderings_simple, "GGPLOT_ordination_all_samples_together_treatment_DNA_RNA_", exp_name, "_centered_PCoA_CORRECTED"), plT_xna, as_rds=T, width=168*3, height=168*3)
 
 ############################################################################## PERFORMING ORDINATIONS USING PCoA ON DNA OR RNA, SEPARATELY
 
@@ -186,6 +185,8 @@ phylo_xna <- list()
 
 # loop through DNA and RNA
 for (xna in c("DNA", "RNA")) {
+
+#	xna <- "DNA"
 
 	# get DNA or RNA samples only
 	phylo_xna[[xna]] <- prune_samples(as.character(centered_phylo_metadata$sampleID[which(centered_phylo_metadata$DNA_RNA == xna)]), centered_phylo_data)
@@ -234,16 +235,19 @@ for (xna in c("DNA", "RNA")) {
 	# plot without facets and make sure to select the proper ordinations
 	# and the proper nucleic acid: computed_ordination_xna[[xna]]
 	plT_ttcxna <- ggplot(data_to_plot, aes(x=pcoa_one, y=pcoa_two, fill=treatment, shape=timepoint)) +
-				geom_point(size=20, color="black", stroke=3) +
+				geom_point(size=15, color="black", stroke=3) +
+#				geom_text(aes(label=collectionsite), col="black", size=8) +
+#				scale_fill_manual(values=treatment_palette) +
 				scale_shape_manual(values=timeshape) +
+#				ggtitle(paste0("PCoA analysis ", xna)) +
 				ggtitle("") +
 				xlab(paste0("PCoA1 (", perc_var_xna[1], "%)")) +
 				ylab(paste0("PCoA2 (", perc_var_xna[2], "%)")) +
-				guides(fill=guide_legend(override.aes=list(shape=22, size=20)), shape=guide_legend(override.aes=list(size=20))) +
+				guides(fill=guide_legend(override.aes=list(shape=22, size=15)), shape=guide_legend(override.aes=list(size=15))) +
 				ggplot_theme(leg_pos="bottom", ang_le=0)
 
 	plT_by_treat_time_site_xna[[xna]] <- plT_ttcxna
 
 	# and export
-	export_svg(paste0(save_orderings_simple, "GGPLOT_", xna, "_ordination_all_samples_together_treatment_by_timepoint_", exp_name, "_centered_PCoA_CORRECTED"), plT_ttcxna, as_rds=T)
+	export_figs_tabs(paste0(save_orderings_simple, "GGPLOT_", xna, "_ordination_all_samples_together_treatment_by_timepoint_", exp_name, "_centered_PCoA_CORRECTED"), plT_ttcxna, as_rds=T, width=168*3, height=168*3)
 }
